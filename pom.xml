@@ -54,7 +54,7 @@
 		</dependency>
 		<dependency>
             <groupId>com.systeam</groupId>
-            <artifactId>shared</artifactId>
+            <artifactId>backend</artifactId>
             <version>0.0.1-SNAPSHOT</version> 
         </dependency>
 		<dependency>
