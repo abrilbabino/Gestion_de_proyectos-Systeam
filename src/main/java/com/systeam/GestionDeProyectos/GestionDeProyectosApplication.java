@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 
 @SpringBootApplication
-@EntityScan(basePackages = "com.systeam.shared.model")
+@EntityScan(basePackages = "com.systeam.backend.model")
 public class GestionDeProyectosApplication {
 
 	public static void main(String[] args) {
