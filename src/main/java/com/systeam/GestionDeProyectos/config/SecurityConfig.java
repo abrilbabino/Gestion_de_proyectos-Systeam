@@ -49,10 +49,7 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/projects/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/projects").permitAll()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
             .build();
     }
