@@ -26,4 +26,10 @@ public class CreateProjectRequest {
 
     private LocalDateTime plazo;
     private Boolean gobernanzaComunidad;
+
+    @jakarta.validation.constraints.Min(value = 1, message = "El cupo maximo de tokens debe ser mayor a cero")
+    private Long cupoMaximoTokens;
+
+    @DecimalMin(value = "0.01", message = "El valor nominal del token debe ser mayor a cero")
+    private BigDecimal valorNominalToken;
 }

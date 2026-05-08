@@ -88,6 +88,7 @@ public class ProjectController {
     }
 
     private Long getCurrentUserId(Principal principal) {
-        return 1L;
+        // TODO: extraer del JWT cuando se integre el filtro de autenticacion
+        return 32L;
     }
 }

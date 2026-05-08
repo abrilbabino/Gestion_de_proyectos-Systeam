@@ -43,6 +43,10 @@ public class JdbcProjectRepository implements ProjectRepository {
         p.setEstado(rs.getString("estado"));
         p.setGobernanzaComunidad(rs.getBoolean("gobernanza_comunidad"));
 
+        long cupo = rs.getLong("cupo_maximo_tokens");
+        if (!rs.wasNull()) p.setCupoMaximoTokens(cupo);
+        p.setValorNominalToken(rs.getBigDecimal("valor_nominal_token"));
+
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) p.setCreatedAt(createdAt.toLocalDateTime());
 
@@ -60,8 +64,9 @@ public class JdbcProjectRepository implements ProjectRepository {
         if (proyecto.getId() == null) {
             String sql = """
                 INSERT INTO projects (titulo, descripcion, monto_requerido, plazo, estado,
-                    gobernanza_comunidad, creador_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                    gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token,
+                    creador_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 RETURNING id
                 """;
             Long id = jdbc.queryForObject(sql, Long.class,
@@ -71,13 +76,16 @@ public class JdbcProjectRepository implements ProjectRepository {
                 toTimestamp(proyecto.getPlazo()),
                 proyecto.getEstado(),
                 proyecto.getGobernanzaComunidad(),
+                proyecto.getCupoMaximoTokens(),
+                proyecto.getValorNominalToken(),
                 proyecto.getCreador().getId()
             );
             proyecto.setId(id);
         } else {
             String sql = """
                 UPDATE projects SET titulo=?, descripcion=?, monto_requerido=?, plazo=?,
-                    estado=?, gobernanza_comunidad=?, updated_at=NOW()
+                    estado=?, gobernanza_comunidad=?, cupo_maximo_tokens=?, valor_nominal_token=?,
+                    updated_at=NOW()
                 WHERE id=? AND deleted_at IS NULL
                 """;
             jdbc.update(sql,
@@ -87,6 +95,8 @@ public class JdbcProjectRepository implements ProjectRepository {
                 toTimestamp(proyecto.getPlazo()),
                 proyecto.getEstado(),
                 proyecto.getGobernanzaComunidad(),
+                proyecto.getCupoMaximoTokens(),
+                proyecto.getValorNominalToken(),
                 proyecto.getId()
             );
         }

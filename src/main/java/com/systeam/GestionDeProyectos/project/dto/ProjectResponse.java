@@ -16,6 +16,8 @@ public class ProjectResponse {
     private LocalDateTime plazo;
     private String estado;
     private Boolean gobernanzaComunidad;
+    private Long cupoMaximoTokens;
+    private BigDecimal valorNominalToken;
     private Long creadorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

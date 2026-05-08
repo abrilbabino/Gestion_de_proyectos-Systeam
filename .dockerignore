@@ -1,0 +1,7 @@
+.env
+.git
+.gitignore
+target/classes
+target/generated-sources
+target/maven-*
+*.md

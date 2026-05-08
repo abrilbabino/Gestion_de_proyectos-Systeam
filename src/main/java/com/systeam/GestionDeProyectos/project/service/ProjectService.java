@@ -37,6 +37,8 @@ public class ProjectService {
         proyecto.setPlazo(request.getPlazo());
         proyecto.setEstado("PREPARACION");
         proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad() != null ? request.getGobernanzaComunidad() : false);
+        proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
+        proyecto.setValorNominalToken(request.getValorNominalToken());
 
         return toResponse(projectRepository.save(proyecto));
     }
@@ -53,6 +55,8 @@ public class ProjectService {
         if (request.getMontoRequerido() != null) proyecto.setMontoRequerido(request.getMontoRequerido());
         if (request.getPlazo() != null) proyecto.setPlazo(request.getPlazo());
         if (request.getGobernanzaComunidad() != null) proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad());
+        if (request.getCupoMaximoTokens() != null) proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
+        if (request.getValorNominalToken() != null) proyecto.setValorNominalToken(request.getValorNominalToken());
 
         return toResponse(projectRepository.save(proyecto));
     }
@@ -130,6 +134,8 @@ public class ProjectService {
                 .plazo(proyecto.getPlazo())
                 .estado(proyecto.getEstado())
                 .gobernanzaComunidad(proyecto.getGobernanzaComunidad())
+                .cupoMaximoTokens(proyecto.getCupoMaximoTokens())
+                .valorNominalToken(proyecto.getValorNominalToken())
                 .creadorId(proyecto.getCreador() != null ? proyecto.getCreador().getId() : null)
                 .createdAt(proyecto.getCreatedAt())
                 .updatedAt(proyecto.getUpdatedAt())
