@@ -43,9 +43,14 @@ public class JdbcProjectRepository implements ProjectRepository {
         p.setEstado(rs.getString("estado"));
         p.setGobernanzaComunidad(rs.getBoolean("gobernanza_comunidad"));
 
-        long cupo = rs.getLong("cupo_maximo_tokens");
-        if (!rs.wasNull()) p.setCupoMaximoTokens(cupo);
-        p.setValorNominalToken(rs.getBigDecimal("valor_nominal_token"));
+        Integer cupoMaximo = rs.getObject("cupo_maximo_tokens", Integer.class);
+        if (cupoMaximo != null) p.setCupoMaximoTokens(cupoMaximo);
+
+        BigDecimal valorNominal = rs.getBigDecimal("valor_nominal_token");
+        if (valorNominal != null) p.setValorNominalToken(valorNominal);
+
+        BigDecimal montoRecaudado = rs.getBigDecimal("monto_recaudado");
+        if (montoRecaudado != null) p.setMontoRecaudado(montoRecaudado);
 
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) p.setCreatedAt(createdAt.toLocalDateTime());
@@ -64,9 +69,10 @@ public class JdbcProjectRepository implements ProjectRepository {
         if (proyecto.getId() == null) {
             String sql = """
                 INSERT INTO projects (titulo, descripcion, monto_requerido, plazo, estado,
-                    gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token,
+                    gobernanza_comunidad,
+                    cupo_maximo_tokens, valor_nominal_token, monto_recaudado,
                     creador_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 RETURNING id
                 """;
             Long id = jdbc.queryForObject(sql, Long.class,
@@ -78,14 +84,16 @@ public class JdbcProjectRepository implements ProjectRepository {
                 proyecto.getGobernanzaComunidad(),
                 proyecto.getCupoMaximoTokens(),
                 proyecto.getValorNominalToken(),
+                proyecto.getMontoRecaudado(),
                 proyecto.getCreador().getId()
             );
             proyecto.setId(id);
         } else {
             String sql = """
                 UPDATE projects SET titulo=?, descripcion=?, monto_requerido=?, plazo=?,
-                    estado=?, gobernanza_comunidad=?, cupo_maximo_tokens=?, valor_nominal_token=?,
-                    updated_at=NOW()
+                    estado=?, gobernanza_comunidad=?,
+                    cupo_maximo_tokens=?, valor_nominal_token=?,
+                    monto_recaudado=?, updated_at=NOW()
                 WHERE id=? AND deleted_at IS NULL
                 """;
             jdbc.update(sql,
@@ -97,6 +105,7 @@ public class JdbcProjectRepository implements ProjectRepository {
                 proyecto.getGobernanzaComunidad(),
                 proyecto.getCupoMaximoTokens(),
                 proyecto.getValorNominalToken(),
+                proyecto.getMontoRecaudado(),
                 proyecto.getId()
             );
         }

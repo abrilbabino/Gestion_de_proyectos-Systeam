@@ -1,5 +1,6 @@
 package com.systeam.GestionDeProyectos.project.controller;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 
 import org.springframework.data.domain.Page;
@@ -79,6 +80,11 @@ public class ProjectController {
     public ProjectResponse updateProjectStatus(@PathVariable Long id, @RequestParam String estado) {
         projectService.updateProjectStatus(id, estado.toUpperCase());
         return projectService.getProjectById(id);
+    }
+
+    @PostMapping("/{id}/invest")
+    public ProjectResponse invest(@PathVariable Long id, @RequestParam BigDecimal amount) {
+        return projectService.invest(id, amount);
     }
 
     @PostMapping("/evaluate-states")

@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN monto_recaudado DECIMAL(15,2) NOT NULL DEFAULT 0;

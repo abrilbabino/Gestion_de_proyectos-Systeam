@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -27,8 +28,8 @@ public class CreateProjectRequest {
     private LocalDateTime plazo;
     private Boolean gobernanzaComunidad;
 
-    @jakarta.validation.constraints.Min(value = 1, message = "El cupo maximo de tokens debe ser mayor a cero")
-    private Long cupoMaximoTokens;
+    @Min(value = 1, message = "El cupo maximo de tokens debe ser al menos 1")
+    private Integer cupoMaximoTokens;
 
     @DecimalMin(value = "0.01", message = "El valor nominal del token debe ser mayor a cero")
     private BigDecimal valorNominalToken;
