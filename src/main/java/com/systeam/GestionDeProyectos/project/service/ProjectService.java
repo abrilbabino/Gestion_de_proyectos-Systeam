@@ -1,5 +1,6 @@
 package com.systeam.GestionDeProyectos.project.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -101,6 +102,22 @@ public class ProjectService {
         projectRepository.save(proyecto);
     }
 
+    public ProjectResponse invest(Long projectId, BigDecimal amount) {
+        Proyecto proyecto = findProjectOrThrow(projectId);
+
+        if (!"FINANCIAMIENTO".equals(proyecto.getEstado())) {
+            throw new ConflictException("Solo se puede invertir en proyectos en estado de financiamiento");
+        }
+
+        BigDecimal newAmount = proyecto.getMontoRecaudado().add(amount);
+        if (proyecto.getMontoRequerido().compareTo(newAmount) < 0) {
+            newAmount = proyecto.getMontoRequerido();
+        }
+        proyecto.setMontoRecaudado(newAmount);
+
+        return toResponse(projectRepository.save(proyecto));
+    }
+
     public void evaluateAndUpdateStates() {
         List<Proyecto> projectsInFinancing = projectRepository.findProjectsInFinancing();
 
@@ -136,6 +153,7 @@ public class ProjectService {
                 .gobernanzaComunidad(proyecto.getGobernanzaComunidad())
                 .cupoMaximoTokens(proyecto.getCupoMaximoTokens())
                 .valorNominalToken(proyecto.getValorNominalToken())
+                .montoRecaudado(proyecto.getMontoRecaudado())
                 .creadorId(proyecto.getCreador() != null ? proyecto.getCreador().getId() : null)
                 .createdAt(proyecto.getCreatedAt())
                 .updatedAt(proyecto.getUpdatedAt())

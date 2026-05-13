@@ -12,14 +12,23 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.systeam.GestionDeProyectos.security.TokenValidationFilter;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private final TokenValidationFilter tokenValidationFilter;
+
+    public SecurityConfig(TokenValidationFilter tokenValidationFilter) {
+        this.tokenValidationFilter = tokenValidationFilter;
+    }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -48,9 +57,20 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(authorize -> authorize
-                .anyRequest().permitAll()
+            .exceptionHandling(ex -> ex
+                // 401 cuando no hay token o el token es inválido/expirado
+                .authenticationEntryPoint((req, res, e) -> res.sendError(401, "No autenticado"))
+                // 403 cuando el token es válido pero no tiene el permiso
+                .accessDeniedHandler((req, res, e) -> res.sendError(403, "Acceso denegado"))
             )
+            .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // El catálogo público es el único endpoint abierto sin login
+                .requestMatchers(HttpMethod.GET, "/api/projects/catalog").permitAll()
+                // Todo lo demás requiere estar autenticado (+ @PreAuthorize en el controller)
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(tokenValidationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
 }
