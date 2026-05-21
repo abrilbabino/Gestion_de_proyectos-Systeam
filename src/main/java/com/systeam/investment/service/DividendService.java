@@ -1,0 +1,154 @@
+package com.systeam.investment.service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.systeam.project.exception.ConflictException;
+import com.systeam.project.exception.ResourceNotFoundException;
+
+@Service
+public class DividendService {
+
+    private static final Logger log = LoggerFactory.getLogger(DividendService.class);
+
+    private final JdbcTemplate jdbc;
+
+    public DividendService(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @Transactional
+    public Long crearReparto(Long proyectoId, BigDecimal montoTotal) {
+        String estado = jdbc.queryForObject(
+            "SELECT estado FROM projects WHERE id = ? AND deleted_at IS NULL",
+            String.class, proyectoId
+        );
+
+        if (estado == null) {
+            throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + proyectoId);
+        }
+
+        if (!"EJECUCION".equals(estado) && !"FINALIZADO".equals(estado)) {
+            throw new ConflictException(
+                "Solo se pueden repartir dividendos en proyectos en EJECUCION o FINALIZADO"
+            );
+        }
+
+        Integer totalSubtokensColocados = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(pa.cantidad), 0) FROM portfolio_activos pa " +
+            "JOIN subtokens s ON pa.subtoken_id = s.id WHERE s.proyecto_id = ?",
+            Integer.class, proyectoId
+        );
+
+        if (totalSubtokensColocados == null || totalSubtokensColocados <= 0) {
+            throw new ConflictException("No hay subtokens colocados para este proyecto");
+        }
+
+        BigDecimal montoPorSubtoken = montoTotal.divide(
+            BigDecimal.valueOf(totalSubtokensColocados), 4, RoundingMode.HALF_UP
+        );
+
+        Long dividendoId = jdbc.queryForObject("""
+            INSERT INTO dividendos (proyecto_id, monto_total, monto_por_subtoken, fecha_reparto, created_at)
+            VALUES (?, ?, ?, NOW(), NOW())
+            RETURNING id
+            """, Long.class, proyectoId, montoTotal, montoPorSubtoken
+        );
+
+        log.info("Reparto de dividendos creado: id={}, proyecto={}, total={}, porSubtoken={}",
+                dividendoId, proyectoId, montoTotal, montoPorSubtoken);
+
+        return dividendoId;
+    }
+
+    @Transactional
+    public void reclamarDividendos(Long dividendoId, Long usuarioId) {
+        Map<String, Object> dividendo = jdbc.queryForMap(
+            "SELECT id, proyecto_id, monto_total, monto_por_subtoken, fecha_reparto, created_at FROM dividendos WHERE id = ?", dividendoId
+        );
+
+        Long proyectoId = ((Number) dividendo.get("proyecto_id")).longValue();
+        BigDecimal montoPorSubtoken = (BigDecimal) dividendo.get("monto_por_subtoken");
+
+        List<Map<String, Object>> activos = jdbc.query(
+            "SELECT pa.subtoken_id, pa.cantidad, s.nombre " +
+            "FROM portfolio_activos pa " +
+            "JOIN subtokens s ON pa.subtoken_id = s.id " +
+            "WHERE pa.usuario_id = ? AND s.proyecto_id = ? AND pa.cantidad > 0",
+            (rs, rowNum) -> Map.of(
+                "subtokenId", rs.getLong("subtoken_id"),
+                "cantidad", rs.getInt("cantidad"),
+                "nombre", rs.getString("nombre")
+            ),
+            usuarioId, proyectoId
+        );
+
+        if (activos.isEmpty()) {
+            throw new ConflictException("No tienes subtokens en este proyecto");
+        }
+
+        for (Map<String, Object> activo : activos) {
+            Long subtokenId = (Long) activo.get("subtokenId");
+            Integer cantidad = (Integer) activo.get("cantidad");
+
+            BigDecimal montoRecibido = montoPorSubtoken.multiply(BigDecimal.valueOf(cantidad))
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            jdbc.update("""
+                INSERT INTO reclamos_dividendos (dividendo_id, usuario_id, subtoken_id,
+                    cantidad_subtokens, monto_recibido, reclamado_en)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                """, dividendoId, usuarioId, subtokenId, cantidad, montoRecibido);
+
+            jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?",
+                montoRecibido, usuarioId);
+        }
+
+        log.info("Dividendos reclamados: dividendo={}, usuario={}, activos={}",
+                dividendoId, usuarioId, activos.size());
+    }
+
+    public List<Map<String, Object>> listarRepartos(Long proyectoId) {
+        return jdbc.query(
+            "SELECT id, proyecto_id, monto_total, monto_por_subtoken, fecha_reparto, created_at FROM dividendos WHERE proyecto_id = ? ORDER BY fecha_reparto DESC",
+            (rs, rowNum) -> Map.of(
+                "id", rs.getLong("id"),
+                "proyectoId", rs.getLong("proyecto_id"),
+                "montoTotal", rs.getBigDecimal("monto_total"),
+                "montoPorSubtoken", rs.getBigDecimal("monto_por_subtoken"),
+                "fechaReparto", rs.getTimestamp("fecha_reparto").toLocalDateTime(),
+                "createdAt", rs.getTimestamp("created_at").toLocalDateTime()
+            ),
+            proyectoId
+        );
+    }
+
+    public List<Map<String, Object>> listarReclamosUsuario(Long usuarioId) {
+        return jdbc.query(
+            "SELECT rd.*, d.proyecto_id, d.monto_total, d.monto_por_subtoken " +
+            "FROM reclamos_dividendos rd " +
+            "JOIN dividendos d ON rd.dividendo_id = d.id " +
+            "WHERE rd.usuario_id = ? ORDER BY rd.reclamado_en DESC",
+            (rs, rowNum) -> Map.of(
+                "id", rs.getLong("id"),
+                "dividendoId", rs.getLong("dividendo_id"),
+                "proyectoId", rs.getLong("proyecto_id"),
+                "subtokenId", rs.getLong("subtoken_id"),
+                "cantidadSubtokens", rs.getInt("cantidad_subtokens"),
+                "montoRecibido", rs.getBigDecimal("monto_recibido"),
+                "reclamadoEn", rs.getTimestamp("reclamado_en").toLocalDateTime(),
+                "montoTotal", rs.getBigDecimal("monto_total"),
+                "montoPorSubtoken", rs.getBigDecimal("monto_por_subtoken")
+            ),
+            usuarioId
+        );
+    }
+}
