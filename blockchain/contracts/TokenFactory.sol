@@ -18,6 +18,7 @@ contract TokenFactory {
     mapping(address => uint256) public proyectoDeToken;
 
     constructor(address _treasury) {
+        require(_treasury != address(0), "TokenFactory: treasury cannot be zero");
         treasury = _treasury;
     }
 

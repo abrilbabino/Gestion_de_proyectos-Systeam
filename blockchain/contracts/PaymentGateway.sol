@@ -10,7 +10,7 @@ contract PaymentGateway is Ownable {
 
     event Withdrawn(address indexed to, uint256 amount);
 
-    IERC20 public usdc;
+    IERC20 public immutable usdc;
     address public treasury;
 
     constructor(address _usdc, address _treasury) Ownable(_treasury) {

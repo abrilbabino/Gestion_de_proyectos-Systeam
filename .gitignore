@@ -37,3 +37,9 @@ build/
 # Blockchain
 blockchain/node_modules/
 blockchain/compiled/
+blockchain/out/
+blockchain/cache/
+blockchain/lib/
+node_modules/
+package-lock.json
+package.json

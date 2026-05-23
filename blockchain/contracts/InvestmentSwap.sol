@@ -3,8 +3,10 @@ pragma solidity ^0.8.20;
 
 import "./ProjectToken.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract InvestmentSwap {
+contract InvestmentSwap is Ownable, ReentrancyGuard {
 
     event TokenDeProyectoCreado(
         uint256 indexed proyectoId,
@@ -31,7 +33,7 @@ contract InvestmentSwap {
     mapping(address => uint256) public proyectoDeToken;
     address[] public tokensCreados;
 
-    constructor(address _idea, address _treasury) {
+    constructor(address _idea, address _treasury) Ownable(msg.sender) {
         require(_idea != address(0), "IDEA address required");
         require(_treasury != address(0), "Treasury address required");
         idea = IERC20(_idea);
@@ -43,7 +45,7 @@ contract InvestmentSwap {
         string calldata nombre,
         string calldata simbolo,
         uint256 supplyInicial
-    ) external returns (address) {
+    ) external onlyOwner returns (address) {
         require(tokenDeProyecto[proyectoId] == address(0),
             "InvestmentSwap: token already exists for this project");
         ProjectToken nuevoToken = new ProjectToken(nombre, simbolo, address(this));
@@ -63,7 +65,7 @@ contract InvestmentSwap {
         uint256 ideaAmount,
         uint256 subTokenAmount,
         address investor
-    ) external {
+    ) external nonReentrant {
         require(ideaAmount > 0, "InvestmentSwap: ideaAmount must be > 0");
         require(subTokenAmount > 0, "InvestmentSwap: subTokenAmount must be > 0");
         require(investor != address(0), "InvestmentSwap: invalid investor address");
@@ -81,7 +83,7 @@ contract InvestmentSwap {
         uint256 subTokenAmount,
         address holder,
         address investor
-    ) external {
+    ) external onlyOwner nonReentrant {
         require(subTokenAmount > 0, "InvestmentSwap: subTokenAmount must be > 0");
         address projectTokenAddr = tokenDeProyecto[proyectoId];
         require(projectTokenAddr != address(0),
