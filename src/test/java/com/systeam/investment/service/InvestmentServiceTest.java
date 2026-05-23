@@ -35,7 +35,7 @@ import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.blockchain.service.InvestmentSwapService;
 import com.systeam.config.BlockchainProperties;
-import com.systeam.project.service.SmartContractService;
+import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;

@@ -17,8 +17,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.systeam.blockchain.service.InvestmentSwapService;
-import com.systeam.blockchain.service.TokenFactoryService;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -27,7 +25,7 @@ import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.project.repository.ProjectRepository;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.systeam.tokenization.service.TokenizationService;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceTest {
@@ -36,13 +34,7 @@ class ProjectServiceTest {
     private ProjectRepository projectRepository;
 
     @Mock
-    private TokenFactoryService tokenFactoryService;
-
-    @Mock
-    private InvestmentSwapService investmentSwapService;
-
-    @Mock
-    private JdbcTemplate jdbc;
+    private TokenizationService tokenizationService;
 
     @InjectMocks
     private ProjectService projectService;
@@ -152,16 +144,13 @@ class ProjectServiceTest {
 
         when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
         when(projectRepository.save(any(Proyecto.class))).thenReturn(proyectoBase);
-        when(tokenFactoryService.crearTokenProyecto(any(), any(), any(), any()))
-            .thenReturn("0x1234567890123456789012345678901234567890");
-        when(jdbc.update(any(String.class), any(), any(), any(), any(), any(), any(), any(), any()))
-            .thenReturn(1);
 
         projectService.updateProjectStatus(1L, "FINANCIAMIENTO");
 
         verify(projectRepository).save(any(Proyecto.class));
-        verify(tokenFactoryService).crearTokenProyecto(any(), any(), any(), any());
-        verify(jdbc).update(any(String.class), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(tokenizationService).crearTokenParaProyecto(
+            proyectoBase.getId(), proyectoBase.getTitulo(),
+            proyectoBase.getCupoMaximoTokens(), proyectoBase.getValorNominalToken());
     }
 
     @Test
@@ -204,15 +193,13 @@ class ProjectServiceTest {
 
         when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
         when(projectRepository.save(any(Proyecto.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(tokenFactoryService.crearTokenProyecto(any(), any(), any(), any()))
-            .thenReturn("0x1234567890123456789012345678901234567890");
-        when(jdbc.update(any(String.class), any(), any(), any(), any(), any(), any(), any(), any()))
-            .thenReturn(1);
 
         projectService.updateProjectStatus(1L, "FINANCIAMIENTO");
 
         verify(projectRepository).save(any(Proyecto.class));
-        verify(tokenFactoryService).crearTokenProyecto(any(), any(), any(), any());
+        verify(tokenizationService).crearTokenParaProyecto(
+            proyectoBase.getId(), proyectoBase.getTitulo(),
+            proyectoBase.getCupoMaximoTokens(), proyectoBase.getValorNominalToken());
     }
 
     @Test

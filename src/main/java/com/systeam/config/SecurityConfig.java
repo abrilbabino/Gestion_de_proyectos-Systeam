@@ -65,8 +65,10 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // El catálogo público es el único endpoint abierto sin login
+                // Endpoints públicos (no requieren token)
                 .requestMatchers(HttpMethod.GET, "/api/projects/catalog").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/modules/status").permitAll()
+                .requestMatchers("/estado.html", "/static/**", "/css/**", "/js/**").permitAll()
                 // Todo lo demás requiere estar autenticado (+ @PreAuthorize en el controller)
                 .anyRequest().authenticated()
             )

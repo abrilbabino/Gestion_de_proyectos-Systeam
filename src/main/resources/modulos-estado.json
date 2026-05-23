@@ -1,0 +1,330 @@
+{
+  "modulos": [
+    {
+      "nombre": "Inversión",
+      "etapas": [
+        {
+          "nombre": "Validar persona",
+          "estado": "hecho",
+          "descripcion": "Verificar que el usuario existe, está autenticado (JWT) y tiene permiso 'investment:create'",
+          "dependencias": ["Módulo Auth (login + JWT)", "Roles y permisos"],
+          "entregables": ["InvestmentController con @PreAuthorize", "AuthServiceClient valida token contra Ulises"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Registrar inversión en DB",
+          "estado": "hecho",
+          "descripcion": "Guardar la inversión en tabla investments con monto, proyecto_id, usuario_id, estado, created_at",
+          "dependencias": ["Validar persona", "Tabla investments creada (Flyway V1..V12)"],
+          "entregables": ["JdbcInvestmentRepository", "InvestmentService.createInvestment()", "Migration Flyway"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Actualizar saldo proyecto",
+          "estado": "hecho",
+          "descripcion": "Sumar el monto invertido al monto_recaudado del proyecto en DB. Validar que no supere el monto_requerido",
+          "dependencias": ["Registrar inversión en DB"],
+          "entregables": ["UPDATE projects SET monto_recaudado = monto_recaudado + ?"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Swap atómico on-chain",
+          "estado": "hecho",
+          "descripcion": "InvestmentSwap.invest() ejecuta transferFrom($IDEA) + mint(sub-tokens) + evento en una sola tx. Web3j firma con private key del backend",
+          "dependencias": ["InvestmentSwap v3 deployado en Sepolia", "IDEA Token deployado", "ProjectToken creado al publicar proyecto"],
+          "entregables": ["InvestmentSwap.sol invest()", "InvestmentSwapService.java (Web3j)", "Fallback a DB si Sepolia falla"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Refund / Devolución",
+          "estado": "hecho",
+          "descripcion": "Cuando un proyecto vence sin alcanzar la meta: quemar sub-tokens on-chain (burnFrom), actualizar inversión a REEMBOLSADA en DB, proyecto a RECHAZADO",
+          "dependencias": ["Swap atómico on-chain", "Migration V13 (RECHAZADO)"],
+          "entregables": ["InvestmentSwap.refund()", "InvestmentScheduler @Scheduled 6AM", "Refund on-chain + DB"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Historial de inversiones",
+          "estado": "hecho",
+          "descripcion": "GET /api/investments/history con paginación, filtro por usuario autenticado, joins con projects para mostrar título",
+          "dependencias": ["Registrar inversión en DB", "Módulo Proyecto"],
+          "entregables": ["InvestmentController.getHistory()", "N+1 eliminado con buildTituloMap()", "DTO con txHash, monto, proyecto, fecha"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Precio dinámico",
+          "estado": "hecho",
+          "descripcion": "Calcular precio del sub-token según demanda: precioBase × (1 + (vendidos/total) × volatilidad). Los primeros inversores pagan menos",
+          "dependencias": ["Registrar inversión en DB", "Tabla subtokens con precio_base y factor_volatilidad"],
+          "entregables": ["DynamicPricingService.calcularPrecioDinamico()", "Fórmula integrada en InvestmentService"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Scheduler cierre automático",
+          "estado": "hecho",
+          "descripcion": "Evaluar proyectos vencidos cada 6 AM. Si no alcanzaron meta → refund on-chain + RECHAZADO. Si alcanzaron → FINALIZADO",
+          "dependencias": ["Refund / Devolución", "Migration V13"],
+          "entregables": ["InvestmentScheduler.processExpiredProjects()", "Integración con InvestmentSwap.refund()"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Simulación sin blockchain",
+          "estado": "pendiente",
+          "descripcion": "Poder probar el flujo completo de inversión sin conectarse a Sepolia. Usar un mock de InvestmentSwapService o una flag 'simulacion=true'",
+          "dependencias": ["Todos los puntos anteriores"],
+          "entregables": ["MockInvestmentSwapService", "Profile 'simulacion' en application.properties", "Tests sin RPC"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Marketplace secundario",
+          "estado": "pendiente",
+          "descripcion": "Permitir que inversores compren/vendan sub-tokens entre ellos. Contrato Marketplace con order book y fee automático para la plataforma",
+          "dependencias": ["Swap atómico on-chain", "WalletService"],
+          "entregables": ["Marketplace.sol", "MarketplaceService.java", "Endpoint POST /api/marketplace/orders"],
+          "prioridad": "Baja"
+        }
+      ]
+    },
+    {
+      "nombre": "Proyecto",
+      "etapas": [
+        {
+          "nombre": "CRUD proyectos",
+          "estado": "hecho",
+          "descripcion": "Crear, leer, actualizar proyectos en DB. Validaciones: título obligatorio, monto > 0, descripción max 8000 chars",
+          "dependencias": ["Módulo Auth"],
+          "entregables": ["ProjectController (POST/PUT/GET)", "ProjectService", "JdbcProjectRepository"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Máquina de estados",
+          "estado": "hecho",
+          "descripcion": "Transiciones: PREPARACION → FINANCIAMIENTO → EJECUCION/FINALIZADO. Validar que no se salten pasos",
+          "dependencias": ["CRUD proyectos"],
+          "entregables": ["isValidTransition() en ProjectService", "ConflictException si transición inválida"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Catálogo público",
+          "estado": "hecho",
+          "descripcion": "GET /api/projects/catalog público. Filtros por estado y búsqueda por título/descripción. Paginación. Destacados primero",
+          "dependencias": ["CRUD proyectos"],
+          "entregables": ["findByFilters() con SQL dinámico", "Permitido sin JWT en SecurityConfig"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Crear sub-token on-chain",
+          "estado": "hecho",
+          "descripcion": "Al publicar proyecto (PREP→FINAN), deployar ProjectToken en Sepolia via InvestmentSwap. Fallback a TokenFactory. Guardar contract_address en tabla subtokens",
+          "dependencias": ["Máquina de estados", "InvestmentSwap v3 deployado"],
+          "entregables": ["crearSubtokenParaProyecto()", "Fallback InvestmentSwap → TokenFactory", "INSERT en subtokens"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Boost / Destacar",
+          "estado": "hecho",
+          "descripcion": "Permitir al creador pagar por destacar su proyecto en el catálogo (aparece primero en resultados)",
+          "dependencias": ["Catálogo público", "WalletService"],
+          "entregables": ["BoostService.boostProject()", "UPDATE es_destacado en projects"],
+          "prioridad": "Baja"
+        },
+        {
+          "nombre": "Evaluar vencimiento",
+          "estado": "hecho",
+          "descripcion": "Endpoint manual (ADMIN) y scheduler automático que revisa proyectos vencidos y los cierra",
+          "dependencias": ["Máquina de estados"],
+          "entregables": ["evaluateAndUpdateStates()", "POST /api/projects/evaluate-states"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Simulación sin blockchain",
+          "estado": "pendiente",
+          "descripcion": "Poder crear proyectos y probar flujos sin deployar contratos reales en Sepolia",
+          "dependencias": ["Crear sub-token on-chain"],
+          "entregables": ["Profile 'simulacion'", "ContractAddress ficticia"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Blockchain",
+      "etapas": [
+        {
+          "nombre": "InvestmentSwap v3",
+          "estado": "hecho",
+          "descripcion": "Contrato principal con Ownable + ReentrancyGuard. Funciones: crearTokenProyecto, invest (swap atómico), refund",
+          "dependencias": ["OpenZeppelin (Ownable, ReentrancyGuard)"],
+          "entregables": ["InvestmentSwap.sol", "Deploy a Sepolia en 0x4c53728..."],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "ProjectToken",
+          "estado": "hecho",
+          "descripcion": "ERC-20 con quema del 0.1% en transfers. Override de _update(). No quema en mint/burn",
+          "dependencias": ["OpenZeppelin ERC-20"],
+          "entregables": ["ProjectToken.sol", "Tests de threshold (999 vs 1000)"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "TokenFactory (legacy)",
+          "estado": "hecho",
+          "descripcion": "Contrato anterior que creaba tokens. Bug conocido: supplyInicial > 0 revierte por ownership. Usado como fallback",
+          "dependencias": ["ProjectToken"],
+          "entregables": ["TokenFactory.sol", "Tests documentando el bug"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "PaymentGateway",
+          "estado": "hecho",
+          "descripcion": "Gateway de pagos en USDC. Funciones: pay, setTreasury, withdraw. Inmutable: usdc corregido a public immutable",
+          "dependencias": ["OpenZeppelin ERC-20"],
+          "entregables": ["PaymentGateway.sol", "Tests 36 + fuzz"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Tests unitarios + fuzz",
+          "estado": "hecho",
+          "descripcion": "171 tests Solidity (153 unit + 18 fuzz × 256 runs = 4.608 casos). Cobertura 93.42% lines",
+          "dependencias": ["Foundry (forge test)"],
+          "entregables": ["5 archivos .t.sol", "FuzzEdgeTests.sol para valores extremos"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Seguridad (Slither)",
+          "estado": "hecho",
+          "descripcion": "Análisis estático con Slither de Trail of Bits. 0 High, 0 Medium. Se corrigió: usdc a immutable, require address(0) en TokenFactory",
+          "dependencias": ["Todos los contratos compilados"],
+          "entregables": ["Reporte Slither", "Contratos corregidos"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Deploy a Sepolia",
+          "estado": "hecho",
+          "descripcion": "Deployar todos los contratos a Sepolia Testnet. Verificar con cast. Configurar direcciones en .env y application.properties",
+          "dependencias": ["InvestmentSwap v3", "Foundry (forge create)"],
+          "entregables": ["InvestmentSwap en 0x4c53728...", "IDEIA Token en 0x9f2c766...", "Script DeployInvestmentSwap.java"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Simulación local (Anvil)",
+          "estado": "pendiente",
+          "descripcion": "Usar Anvil (Foundry) para levantar una red local y deployar contratos sin necesidad de Sepolia. Ideal para desarrollo rápido",
+          "dependencias": ["Foundry instalado"],
+          "entregables": ["Script de deploy local con Anvil", "Profile 'local' en application.properties"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Auth (Ulises)",
+      "etapas": [
+        {
+          "nombre": "Login email + JWT",
+          "estado": "hecho",
+          "descripcion": "Endpoint POST /auth/login con email/password. Devuelve accessToken + refreshToken. Password hasheada con BCrypt",
+          "dependencias": ["Tabla usuarios en DB"],
+          "entregables": ["AuthController", "JwtProvider", "BCrypt"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Google OAuth2",
+          "estado": "hecho",
+          "descripcion": "Login con Google. Redirección a /oauth2/authorization/google. Callback registra o loguea usuario automáticamente",
+          "dependencias": ["Login email + JWT", "Client ID y Secret de Google Cloud"],
+          "entregables": ["OAuth2 config en SecurityConfig", "Callback handler"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Roles y permisos",
+          "estado": "hecho",
+          "descripcion": "Roles: USER, ADMIN, PROJECT_CREATOR. Permisos: project:create, investment:create, etc. Control con @PreAuthorize",
+          "dependencias": ["Login email + JWT"],
+          "entregables": ["RoleService", "PermissionService", "Endpoint CRUD roles/permisos"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Refresh token",
+          "estado": "hecho",
+          "descripcion": "Endpoint POST /auth/refresh que recibe refreshToken y devuelve nuevo accessToken. Refresh token dura 7 días",
+          "dependencias": ["Login email + JWT"],
+          "entregables": ["Refresh token rotation", "Almacenamiento en DB o HttpOnly cookie"],
+          "prioridad": "Alta"
+        }
+      ]
+    },
+    {
+      "nombre": "Wallet / $IDEA",
+      "etapas": [
+        {
+          "nombre": "Balance on-chain",
+          "estado": "hecho",
+          "descripcion": "Consultar balance de $IDEA de un usuario en Sepolia vía eth_call. No gasta gas",
+          "dependencias": ["IDEA Token deployado en Sepolia", "Web3j"],
+          "entregables": ["WalletService.getBalance()", "Endpoint GET /api/wallet/balance"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Transferencia entre usuarios",
+          "estado": "pendiente",
+          "descripcion": "Permitir que un usuario envie $IDEA a otro. Transferencia ERC-20 estándar firmada por el backend",
+          "dependencias": ["Balance on-chain"],
+          "entregables": ["WalletService.transfer()", "POST /api/wallet/transfer"],
+          "prioridad": "Baja"
+        },
+        {
+          "nombre": "Faucet automático",
+          "estado": "pendiente",
+          "descripcion": "Al registrar un usuario nuevo, mintear automaticamente una cantidad fija de $IDEA a su wallet en Sepolia",
+          "dependencias": ["Balance on-chain", "Registro de usuario (Auth)"],
+          "entregables": ["Event listener de registro", "IDEA.mint() desde treasury"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Frontend",
+      "etapas": [
+        {
+          "nombre": "Conexión MetaMask",
+          "estado": "hecho",
+          "descripcion": "Conectar wallet con RainbowKit + Wagmi. Mostrar address y balance de ETH en la UI",
+          "dependencias": ["RainbowKit", "Wagmi"],
+          "entregables": ["Layout con ConnectButton", "Provider setup"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Formulario de inversión",
+          "estado": "pendiente",
+          "descripcion": "Modal o página con selector de proyecto, monto de $IDEA, preview del precio dinámico, confirmación",
+          "dependencias": ["Conexión MetaMask", "Endpoint POST /api/investments", "Endpoint GET /api/projects/catalog"],
+          "entregables": ["InvestmentForm component", "Validación frontend", "Loader mientras confirma tx"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Historial de inversiones",
+          "estado": "pendiente",
+          "descripcion": "Tabla paginada con todas las inversiones del usuario, link a Etherscan en cada txHash, filtros por estado",
+          "dependencias": ["Formulario de inversión", "Endpoint GET /api/investments/history"],
+          "entregables": ["InvestmentHistory component", "Badge de estado con color", "Link externo a Etherscan"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Link a Etherscan",
+          "estado": "pendiente",
+          "descripcion": "Mostrar txHash como hipervínculo a sepolia.etherscan.io/tx/{txHash} en detalle de inversión",
+          "dependencias": ["Historial de inversiones"],
+          "entregables": ["EtherscanLink component", "Tooltip con copia de txHash"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Dashboard estado módulos",
+          "estado": "hecho",
+          "descripcion": "Página /estado.html que muestra el tablero visual con todos los módulos, etapas y colores. Endpoint GET /api/modules/status",
+          "dependencias": ["Ninguna (archivo estático + JSON)"],
+          "entregables": ["estado.html", "ModulosController", "modulos-estado.json"],
+          "prioridad": "Alta"
+        }
+      ]
+    }
+  ]
+}
