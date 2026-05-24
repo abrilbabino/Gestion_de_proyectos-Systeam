@@ -1,208 +1,59 @@
-# API Systeam - Modulo de Gestion de Proyectos
+# API Systeam — Gestión de Proyectos e Inversiones
+
+**Base URL:** `http://localhost:8081`  
+**Auth URL:** `http://localhost:8080` (módulo de usuarios)  
+**Autenticación:** JWT Bearer Token — `Authorization: Bearer <token>`
+
+---
 
 ## Tabla de Contenidos
-1. [Informacion General](#informacion-general)
-2. [Autenticacion](#autenticacion)
-3. [Endpoints de Proyectos](#endpoints-de-proyectos)
-4. [Modelo de Datos](#modelo-de-datos)
-5. [Estados del Proyecto](#estados-del-proyecto)
-6. [Códigos de Error](#codigos-de-error)
-7. [Ejemplos de Uso](#ejemplos-de-uso)
+
+1. [Proyectos](#1-proyectos--apiprojects)
+2. [Inversiones](#2-inversiones--apiinvestments)
+3. [Dividendos](#3-dividendos--apidividendos)
+4. [Wallet](#4-wallet--apiwallet)
+5. [Dashboard](#5-dashboard--apidashboard)
+6. [Estados y Roles](#6-estados-y-roles)
+7. [Códigos de Error](#7-códigos-de-error)
 
 ---
 
-## Informacion General
+## 1. Proyectos — `/api/projects`
 
-**Base URL:** `http://localhost:8081`
+### 1.1 Catálogo público con filtros
 
-**Tipo de autenticacion:** JWT (JSON Web Token) - compartido con modulo de usuarios
-
-**Encabezados requeridos:** Para endpoints protegidos, incluir el token JWT en el header:
 ```
-Authorization: Bearer <token_jwt>
+GET /api/projects/catalog
 ```
 
----
+**Autenticación:** No requerida  
+**Query params:**
 
-## Autenticacion
-
-La autenticacion se gestiona a traves del modulo de usuarios (`http://localhost:8080/auth/login`). El token JWT obtenido es valido para este modulo.
-
----
-
-## Endpoints de Proyectos
-
-### 1. Crear proyecto
-
-Crea un nuevo proyecto en estado "PREPARACION".
-
-- **Metodo:** `POST`
-- **Endpoint:** `/api/projects`
-- **Requiere autenticacion:** Si
-- **Permisos necesarios:** `project:create`
-
-#### Request Body
-```json
-{
-  "title": "string (requerido, max 200 caracteres)",
-  "description": "string (requerido, max 5000 caracteres)",
-  "objective": "string (requerido, max 3000 caracteres)",
-  "requiredAmount": "number (requerido, mayor a 0)",
-  "cantidadDeTokens": "number (opcional)",
-  "valorNominal": "number (opcional)"
-}
-```
-
-#### Response (201 Created)
-```json
-{
-  "id": 1,
-  "title": "App de gestion inteligente",
-  "description": "Desarrollo de una aplicacion para...",
-  "objective": "Crear una solucion innovadora...",
-  "requiredAmount": 10000.00,
-  "currentAmount": 0.00,
-  "status": "PREPARACION",
-  "creatorId": 1,
-  "cantidadDeTokens": 1000,
-  "valorNominal": 10.00,
-  "smartContractAddress": null,
-  "financingStartDate": null,
-  "financingEndDate": null,
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T10:30:00",
-  "financingProgress": 0.00,
-  "smartContractInfo": null
-}
-```
-
----
-
-### 2. Actualizar proyecto
-
-Actualiza los datos de un proyecto en estado "PREPARACION".
-
-- **Metodo:** `PUT`
-- **Endpoint:** `/api/projects/{id}`
-- **Requiere autenticacion:** Si
-- **Permisos necesarios:** `project:update`
-
-#### Path Parameters
-| Parametro | Tipo | Descripcion |
-|-----------|------|-------------|
-| id | Long | ID del proyecto |
-
-#### Request Body
-```json
-{
-  "title": "string (opcional)",
-  "description": "string (opcional)",
-  "objective": "string (opcional)",
-  "requiredAmount": "number (opcional, mayor a 0)",
-  "cantidadDeTokens": "number (opcional)",
-  "valorNominal": "number (opcional)"
-}
-```
-
-#### Response (200 OK)
-```json
-{
-  "id": 1,
-  "title": "App de gestion inteligente v2",
-  "description": "Descripcion actualizada...",
-  "objective": "Objetivo actualizado...",
-  "requiredAmount": 15000.00,
-  "currentAmount": 0.00,
-  "status": "PREPARACION",
-  "creatorId": 1,
-  "cantidadDeTokens": 1500,
-  "valorNominal": 10.00,
-  "smartContractAddress": null,
-  "financingStartDate": null,
-  "financingEndDate": null,
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T11:00:00",
-  "financingProgress": 0.00,
-  "smartContractInfo": null
-}
-```
-
----
-
-### 3. Obtener proyecto por ID
-
-Obtiene los datos completos de un proyecto.
-
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects/{id}`
-- **Requiere autenticacion:** No (publico)
-
-#### Path Parameters
-| Parametro | Tipo | Descripcion |
-|-----------|------|-------------|
-| id | Long | ID del proyecto |
-
-#### Response (200 OK)
-```json
-{
-  "id": 1,
-  "title": "App de gestion inteligente",
-  "description": "Desarrollo de una aplicacion...",
-  "objective": "Crear una solucion...",
-  "requiredAmount": 10000.00,
-  "currentAmount": 5000.00,
-  "status": "FINANCIAMIENTO",
-  "creatorId": 1,
-  "cantidadDeTokens": 1000,
-  "valorNominal": 10.00,
-  "smartContractAddress": "0x1234...abcd",
-  "financingStartDate": "2024-01-16T10:00:00",
-  "financingEndDate": "2024-02-15T10:00:00",
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-20T14:00:00",
-  "financingProgress": 50.00,
-  "smartContractInfo": {
-    "address": "0x1234...abcd",
-    "totalSubTokens": 1000,
-    "distribution": "50% invertido, 50% disponible"
-  }
-}
-```
-
----
-
-### 4. Listar todos los proyectos
-
-Lista todos los proyectos con paginacion.
-
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects?page=0&size=10`
-- **Requiere autenticacion:** No (publico)
-
-#### Query Parameters
-| Parametro | Tipo | Default | Descripcion |
+| Parámetro | Tipo | Default | Descripción |
 |-----------|------|---------|-------------|
-| page | int | 0 | Numero de pagina (0-indexed) |
-| size | int | 10 | Cantidad de elementos por pagina |
+| `status` | string | — | Filtrar por estado (`FINANCIAMIENTO`, `EJECUCION`, etc.) |
+| `search` | string | — | Buscar en título o descripción |
+| `page` | int | 0 | Página (0-indexed) |
+| `size` | int | 10 | Elementos por página |
 
-#### Response (200 OK)
+**Response 200:**
 ```json
 {
   "content": [
     {
-      "id": 1,
-      "title": "App de gestion inteligente",
-      "description": "...",
-      "status": "FINANCIAMIENTO",
-      "requiredAmount": 10000.00,
-      "currentAmount": 5000.00,
-      "financingProgress": 50.00,
-      "creatorId": 1,
-      "createdAt": "2024-01-15T10:30:00"
+      "id": 5,
+      "titulo": "App de gestión inteligente",
+      "descripcion": "Plataforma para...",
+      "estado": "FINANCIAMIENTO",
+      "montoRequerido": 103875.00,
+      "montoRecaudado": 7060.00,
+      "plazo": "2026-06-15T00:00:00",
+      "creadorId": 3,
+      "creadoEn": "2026-05-01T10:00:00"
     }
   ],
-  "totalElements": 25,
-  "totalPages": 3,
+  "totalElements": 8,
+  "totalPages": 1,
   "size": 10,
   "number": 0
 }
@@ -210,253 +61,517 @@ Lista todos los proyectos con paginacion.
 
 ---
 
-### 5. Catalogo publico con filtros
+### 1.2 Listar todos los proyectos (paginado)
 
-Lista proyectos activos con filtros de busqueda.
+```
+GET /api/projects?page=0&size=10
+```
 
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects/catalog?status=FINANCIAMIENTO&search=app&page=0&size=10`
-- **Requiere autenticacion:** No (publico)
-
-#### Query Parameters
-| Parametro | Tipo | Default | Descripcion |
-|-----------|------|---------|-------------|
-| status | string | null | Filtrar por estado (PREPARACION, FINANCIAMIENTO, EJECUCION) |
-| search | string | null | Buscar por titulo o descripcion |
-| page | int | 0 | Numero de pagina |
-| size | int | 10 | Elementos por pagina |
+**Autenticación:** No requerida  
+**Response 200:** Mismo formato que catálogo.
 
 ---
 
-### 6. Mis proyectos
+### 1.3 Obtener proyecto por ID
 
-Lista los proyectos creados por el usuario autenticado.
+```
+GET /api/projects/{id}
+```
 
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects/my-projects?page=0&size=10`
-- **Requiere autenticacion:** Si
-
----
-
-### 7. Progreso de financiamiento
-
-Obtiene el progreso de financiamiento de un proyecto.
-
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects/{id}/financing-progress`
-- **Requiere autenticacion:** No (publico)
-
-#### Response (200 OK)
+**Autenticación:** No requerida  
+**Response 200:**
 ```json
 {
-  "projectId": 1,
-  "requiredAmount": 10000.00,
-  "currentAmount": 7500.00,
-  "progressPercentage": 75.00,
-  "status": "FINANCIAMIENTO",
-  "isComplete": false
+  "id": 5,
+  "titulo": "App de gestión inteligente",
+  "descripcion": "Plataforma para...",
+  "objetivo": "Digitalizar la gestión de proyectos...",
+  "estado": "FINANCIAMIENTO",
+  "montoRequerido": 103875.00,
+  "montoRecaudado": 7060.00,
+  "plazo": "2026-06-15T00:00:00",
+  "creadorId": 3,
+  "smartContractAddress": null,
+  "creadoEn": "2026-05-01T10:00:00",
+  "actualizadoEn": "2026-05-20T14:30:00"
 }
 ```
 
 ---
 
-### 8. Informacion de Smart Contract
+### 1.4 Mis proyectos
 
-Obtiene la informacion del smart contract de un proyecto.
+```
+GET /api/projects/my-projects?page=0&size=10
+```
 
-- **Metodo:** `GET`
-- **Endpoint:** `/api/projects/{id}/smart-contract`
-- **Requiere autenticacion:** No (publico)
+**Autenticación:** Requerida  
+**Response 200:** Mismo formato que catálogo, filtrado por el usuario autenticado.
 
-#### Response (200 OK)
+---
+
+### 1.5 Crear proyecto
+
+```
+POST /api/projects
+```
+
+**Autenticación:** Requerida — permiso `project:create`
+
+**Request Body:**
 ```json
 {
-  "address": "0x1234...abcd",
-  "totalSubTokens": 1000,
-  "distribution": "50% invertido, 50% disponible",
-  "note": "Servicio de lectura de smart contract en desarrollo"
+  "titulo": "Mi Proyecto Innovador",
+  "descripcion": "Descripción detallada del proyecto...",
+  "objetivo": "Lograr X para Y...",
+  "montoRequerido": 10000.00,
+  "plazo": "2026-08-01T00:00:00"
+}
+```
+
+**Response 201:**
+```json
+{
+  "id": 12,
+  "titulo": "Mi Proyecto Innovador",
+  "descripcion": "Descripción detallada del proyecto...",
+  "objetivo": "Lograr X para Y...",
+  "estado": "PREPARACION",
+  "montoRequerido": 10000.00,
+  "montoRecaudado": 0.00,
+  "plazo": "2026-08-01T00:00:00",
+  "creadorId": 7,
+  "smartContractAddress": null,
+  "creadoEn": "2026-05-23T12:00:00",
+  "actualizadoEn": "2026-05-23T12:00:00"
 }
 ```
 
 ---
 
-### 9. Invertir en proyecto
+### 1.6 Actualizar proyecto
 
-Realiza una inversion en un proyecto en estado "FINANCIAMIENTO".
+```
+PUT /api/projects/{id}
+```
 
-- **Metodo:** `POST`
-- **Endpoint:** `/api/projects/{id}/invest?amount=500`
-- **Requiere autenticacion:** Si
-- **Permisos necesarios:** `project:invest`
+**Autenticación:** Requerida — permiso `project:update` (solo en estado `PREPARACION`)
 
-#### Query Parameters
-| Parametro | Tipo | Descripcion |
-|-----------|------|-------------|
-| amount | number | Monto a invertir (mayor a 0) |
+**Request Body:** (todos los campos son opcionales)
+```json
+{
+  "titulo": "Mi Proyecto v2",
+  "descripcion": "Nueva descripción...",
+  "objetivo": "Objetivo actualizado...",
+  "montoRequerido": 15000.00,
+  "plazo": "2026-09-01T00:00:00"
+}
+```
 
----
-
-### 10. Actualizar estado del proyecto
-
-Cambia el estado de un proyecto (transiciones validas).
-
-- **Metodo:** `PATCH`
-- **Endpoint:** `/api/projects/{id}/status?status=FINANCIAMIENTO`
-- **Requiere autenticacion:** Si
-- **Permisos necesarios:** `project:update`
-
-#### Transiciones validas:
-- PREPARACION -> FINANCIAMIENTO
-- FINANCIAMIENTO -> EJECUCION (cuando se alcanza el 100%)
-- FINANCIAMIENTO -> FINALIZADO (cuando vence el plazo)
-- EJECUCION -> FINALIZADO
+**Response 200:** Objeto proyecto actualizado (mismo formato que 1.5).
 
 ---
 
-### 11. Evaluar y actualizar estados automaticamente
+### 1.7 Cambiar estado del proyecto
 
-Evalua todos los proyectos en financiamiento y actualiza sus estados segun monto alcanzado o fecha de vencimiento.
+```
+PATCH /api/projects/{id}/status?status=FINANCIAMIENTO
+```
 
-- **Metodo:** `POST`
-- **Endpoint:** `/api/projects/evaluate-states`
-- **Requiere autenticacion:** Si
+**Autenticación:** Requerida — permiso `project:update`
 
----
+**Query param:** `status` — nuevo estado a asignar
 
-## Modelo de Datos
+**Transiciones válidas:**
+- `PREPARACION` → `FINANCIAMIENTO`
+- `FINANCIAMIENTO` → `EJECUCION` (100% financiado)
+- `FINANCIAMIENTO` → `RECHAZADO` (plazo vencido sin fondos)
+- `EJECUCION` → `FINALIZADO`
 
-### Project
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id | Long | Identificador unico |
-| title | String | Titulo del proyecto |
-| description | String | Descripcion detallada |
-| objective | String | Objetivo del proyecto |
-| requiredAmount | BigDecimal | Monto total requerido |
-| currentAmount | BigDecimal | Monto recaudado actualmente |
-| status | Enum | Estado actual del proyecto |
-| creatorId | Long | ID del creador (FK a users) |
-| cantidadDeTokens | Long | Cantidad total de tokens |
-| valorNominal | BigDecimal | Valor de cada token |
-| smartContractAddress | String | Direccion del contrato inteligente |
-| financingStartDate | LocalDateTime | Fecha inicio financiamiento |
-| financingEndDate | LocalDateTime | Fecha fin financiamiento |
-| createdAt | LocalDateTime | Fecha de creacion |
-| updatedAt | LocalDateTime | Ultima actualizacion |
+**Response 200:** Objeto proyecto con el nuevo estado.
 
 ---
 
-## Estados del Proyecto
+### 1.8 Boost de proyecto (marcar destacado)
 
-| Estado | Descripcion | Acciones permitidas |
-|--------|-------------|---------------------|
-| PREPARACION | Proyecto en creacion | Editar, publicar |
-| FINANCIAMIENTO | Recibiendo inversiones | Invertir, ver progreso |
-| EJECUCION | En ejecucion | Ver estado, progreso |
-| FINALIZADO | Cerrado | Solo lectura |
+```
+POST /api/projects/{id}/boost
+```
+
+**Autenticación:** Requerida — rol `ADMIN`  
+**Response 200:**
+```json
+{
+  "mensaje": "Proyecto destacado exitosamente"
+}
+```
 
 ---
 
-## Codigos de Error
+### 1.9 Evaluar estados de proyectos (scheduler manual)
 
-| Codigo | Descripcion |
+```
+POST /api/projects/evaluate-states
+```
+
+**Autenticación:** Requerida  
+Evalúa todos los proyectos en `FINANCIAMIENTO` cuyo plazo venció y ejecuta devoluciones si no alcanzaron el monto.
+
+**Response 200:**
+```json
+{
+  "mensaje": "Estados evaluados correctamente"
+}
+```
+
+---
+
+## 2. Inversiones — `/api/investments`
+
+### 2.1 Validar inversión (pre-check)
+
+```
+POST /api/investments/validate
+```
+
+**Autenticación:** Requerida — permiso `investment:read`  
+Verifica si la inversión es posible **sin ejecutarla**.
+
+**Request Body:**
+```json
+{
+  "proyectoId": 5,
+  "montoIdea": 100.00
+}
+```
+
+**Response 200:**
+```json
+{
+  "valido": true,
+  "mensaje": "Inversion valida",
+  "cupoDisponible": 31955,
+  "precioSubtoken": 3.25,
+  "subTokensARecebir": 30
+}
+```
+
+**Response cuando no es válido:**
+```json
+{
+  "valido": false,
+  "mensaje": "El monto es insuficiente para recibir al menos 1 sub-token",
+  "cupoDisponible": 31955,
+  "precioSubtoken": 3.25,
+  "subTokensARecebir": 0
+}
+```
+
+---
+
+### 2.2 Crear inversión
+
+```
+POST /api/investments
+```
+
+**Autenticación:** Requerida — permiso `investment:create`
+
+**Request Body:**
+```json
+{
+  "proyectoId": 5,
+  "montoIdea": 100.00,
+  "txHash": null
+}
+```
+
+> `txHash` es opcional — si el swap on-chain falla, el sistema lo genera mediante fallback en DB.
+
+**Response 201:**
+```json
+{
+  "id": 42,
+  "usuarioId": 7,
+  "proyectoId": 5,
+  "proyectoTitulo": "App de gestión inteligente",
+  "proyectoEstado": "FINANCIAMIENTO",
+  "montoIdea": 100.00,
+  "subTokensRecibidos": 30,
+  "txHash": "0xabc123...def456",
+  "estado": "CONFIRMADA",
+  "createdAt": "2026-05-23T12:05:00",
+  "updatedAt": "2026-05-23T12:05:00"
+}
+```
+
+**Errores posibles:**
+- `409` — Proyecto no en financiamiento / saldo insuficiente / cupo agotado / txHash duplicado
+
+---
+
+### 2.3 Obtener inversión por ID
+
+```
+GET /api/investments/{id}
+```
+
+**Autenticación:** Requerida — permiso `investment:read`
+
+**Response 200:** Mismo formato que 2.2.
+
+---
+
+### 2.4 Historial de inversiones del usuario
+
+```
+GET /api/investments/history?page=0&size=10
+```
+
+**Autenticación:** Requerida — permiso `investment:read`
+
+**Response 200:**
+```json
+{
+  "content": [
+    {
+      "id": 42,
+      "usuarioId": 7,
+      "proyectoId": 5,
+      "proyectoTitulo": "App de gestión inteligente",
+      "proyectoEstado": "FINANCIAMIENTO",
+      "montoIdea": 100.00,
+      "subTokensRecibidos": 30,
+      "txHash": "0xabc123...def456",
+      "estado": "CONFIRMADA",
+      "createdAt": "2026-05-23T12:05:00",
+      "updatedAt": "2026-05-23T12:05:00"
+    }
+  ],
+  "totalElements": 3,
+  "totalPages": 1,
+  "size": 10,
+  "number": 0
+}
+```
+
+---
+
+## 3. Dividendos — `/api/dividendos`
+
+### 3.1 Crear reparto de dividendos
+
+```
+POST /api/dividendos/proyecto/{proyectoId}?monto=5000
+```
+
+**Autenticación:** Requerida — rol `ADMIN`  
+Solo para proyectos en estado `EJECUCION` o `FINALIZADO`.
+
+**Query param:** `monto` — monto total a repartir (BigDecimal)
+
+**Response 201:**
+```json
+{
+  "id": 1,
+  "mensaje": "Reparto de dividendos creado exitosamente"
+}
+```
+
+**Errores posibles:**
+- `409` — Proyecto no en EJECUCION/FINALIZADO o sin subtokens colocados
+
+---
+
+### 3.2 Listar repartos de un proyecto
+
+```
+GET /api/dividendos/proyecto/{proyectoId}
+```
+
+**Autenticación:** Requerida — permiso `investment:read`
+
+**Response 200:**
+```json
+[
+  {
+    "id": 1,
+    "proyectoId": 5,
+    "montoTotal": 5000.00,
+    "montoPorSubtoken": 0.1563,
+    "fechaReparto": "2026-05-23T12:00:00",
+    "createdAt": "2026-05-23T12:00:00"
+  }
+]
+```
+
+---
+
+### 3.3 Reclamar dividendos
+
+```
+POST /api/dividendos/{dividendoId}/reclamar
+```
+
+**Autenticación:** Requerida — permiso `investment:read`  
+El usuario recibe el monto proporcional a sus subtokens. El saldo se acredita en `saldo_idea`.
+
+**Response 200:**
+```json
+{
+  "mensaje": "Dividendos reclamados exitosamente"
+}
+```
+
+**Errores posibles:**
+- `409` — El usuario no tiene subtokens en ese proyecto
+
+---
+
+### 3.4 Mis reclamos de dividendos
+
+```
+GET /api/dividendos/mis-reclamos
+```
+
+**Autenticación:** Requerida — permiso `investment:read`
+
+**Response 200:**
+```json
+[
+  {
+    "id": 10,
+    "dividendoId": 1,
+    "proyectoId": 5,
+    "subtokenId": 3,
+    "cantidadSubtokens": 30,
+    "montoRecibido": 4.69,
+    "reclamadoEn": "2026-05-23T12:30:00",
+    "montoTotal": 5000.00,
+    "montoPorSubtoken": 0.1563
+  }
+]
+```
+
+---
+
+## 4. Wallet — `/api/wallet`
+
+### 4.1 Resumen de wallet del usuario
+
+```
+GET /api/wallet/summary
+```
+
+**Autenticación:** Requerida
+
+**Response 200:**
+```json
+{
+  "usuarioId": 7,
+  "saldoIdea": 850.00,
+  "portfolio": [
+    {
+      "subtokenId": 3,
+      "proyectoId": 5,
+      "proyectoTitulo": "App de gestión inteligente",
+      "cantidad": 30,
+      "precioActual": 3.25,
+      "valorTotal": 97.50
+    }
+  ],
+  "totalPortfolioValor": 97.50
+}
+```
+
+---
+
+## 5. Dashboard — `/api/dashboard`
+
+### 5.1 Estadísticas globales
+
+```
+GET /api/dashboard/stats
+```
+
+**Autenticación:** Requerida — rol `ADMIN`
+
+**Response 200:**
+```json
+{
+  "totalProyectos": 12,
+  "proyectosEnFinanciamiento": 4,
+  "proyectosEnEjecucion": 3,
+  "proyectosFinalizados": 5,
+  "totalInversiones": 87,
+  "montoTotalRecaudado": 142500.00,
+  "totalUsuarios": 34
+}
+```
+
+---
+
+## 6. Estados y Roles
+
+### Estados de un proyecto
+
+| Estado | Descripción |
 |--------|-------------|
-| 200 | OK - Solicitud exitosa |
-| 201 | Created - Recurso creado exitosamente |
-| 204 | No Content - Solicitud exitosa sin contenido |
-| 400 | Bad Request - Error de validacion |
-| 401 | Unauthorized - No autenticado o token invalido |
-| 403 | Forbidden - No tiene permisos suficientes |
-| 404 | Not Found - Proyecto no encontrado |
-| 409 | Conflict - Conflicto de datos o estado invalido |
-| 500 | Internal Server Error - Error del servidor |
+| `PREPARACION` | Creado, editable, no visible para inversores |
+| `FINANCIAMIENTO` | Recibiendo inversiones |
+| `EJECUCION` | Financiamiento completado, en desarrollo |
+| `FINALIZADO` | Proyecto terminado |
+| `RECHAZADO` | Plazo vencido sin alcanzar el monto requerido — inversiones devueltas |
+
+### Estados de una inversión
+
+| Estado | Descripción |
+|--------|-------------|
+| `CONFIRMADA` | Inversión registrada y activa |
+| `REEMBOLSADA` | Devuelta por proyecto rechazado |
+
+### Roles y permisos relevantes
+
+| Rol / Permiso | Acceso |
+|---------------|--------|
+| `ADMIN` | Crear repartos de dividendos, boost de proyectos, dashboard stats |
+| `project:create` | Crear proyectos |
+| `project:update` | Editar y cambiar estado de proyectos |
+| `investment:read` | Ver inversiones, historial, dividendos, wallet |
+| `investment:create` | Crear inversiones |
 
 ---
 
-## Ejemplos de Uso
+## 7. Códigos de Error
 
-### Flujo tipico de un proyecto
+| Código | Descripción |
+|--------|-------------|
+| `200` | OK |
+| `201` | Creado exitosamente |
+| `400` | Error de validación en el body |
+| `401` | No autenticado o token inválido |
+| `403` | Sin permisos suficientes |
+| `404` | Recurso no encontrado |
+| `409` | Conflicto de estado o datos duplicados |
+| `500` | Error interno del servidor |
 
-1. **Crear proyecto** (CREATOR)
-```javascript
-const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+### Formato de error estándar
 
-fetch('http://localhost:8081/api/projects', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    title: 'Mi Proyecto Innovador',
-    description: 'Un proyecto para revolucionar...',
-    objective: 'Lograr X para Y...',
-    requiredAmount: 10000,
-    cantidadDeTokens: 1000,
-    valorNominal: 10
-  })
-})
-.then(res => res.json())
-.then(data => console.log(data));
-```
-
-2. **Editar proyecto** (solo en PREPARACION)
-```javascript
-fetch('http://localhost:8081/api/projects/1', {
-  method: 'PUT',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    title: 'Mi Proyecto Innovador v2',
-    requiredAmount: 15000
-  })
-})
-```
-
-3. **Publicar / pasar a financiamiento**
-```javascript
-fetch('http://localhost:8081/api/projects/1/status?status=FINANCIAMIENTO', {
-  method: 'PATCH',
-  headers: { 'Authorization': `Bearer ${token}` }
-})
-```
-
-4. **Ver catalogo publico**
-```javascript
-fetch('http://localhost:8081/api/projects/catalog?status=FINANCIAMIENTO&page=0&size=10')
-  .then(res => res.json())
-  .then(data => console.log(data));
-```
-
-5. **Invertir en un proyecto** (INVESTOR)
-```javascript
-fetch('http://localhost:8081/api/projects/1/invest?amount=500', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${token}` }
-})
-```
-
-6. **Ver progreso de financiamiento**
-```javascript
-fetch('http://localhost:8081/api/projects/1/financing-progress')
-  .then(res => res.json())
-  .then(data => console.log(`Progreso: ${data.progressPercentage}%`));
+```json
+{
+  "timestamp": "2026-05-23T12:00:00",
+  "status": 409,
+  "error": "Conflict",
+  "message": "El proyecto no esta en estado de financiamiento",
+  "path": "/api/investments"
+}
 ```
 
 ---
 
-## Notas Importantes
+## Notas de integración
 
-1. **El token JWT es compartido** con el modulo de usuarios. Obtenelo en `http://localhost:8080/auth/login`.
-
-2. **Validacion matematica de tokens:** Si se proporcionan `cantidadDeTokens` y `valorNominal`, su producto debe coincidir exactamente con `requiredAmount`.
-
-3. **Solo proyectos en PREPARACION** pueden ser editados.
-
-4. **La paginacion es 0-indexed** - la primera pagina es `page=0`.
-
-5. **Los estados siguen un flujo estricto:** PREPARACION -> FINANCIAMIENTO -> EJECUCION -> FINALIZADO.
-
-6. **Los endpoints GET de proyectos son publicos** para permitir la exploracion del catalogo sin autenticacion.
+- El token JWT se obtiene en `http://localhost:8080/auth/login` y es válido para todos los módulos.
+- El precio de los subtokens es **dinámico**: sube a medida que se venden tokens (oferta/demanda). Usar `/api/investments/validate` antes de confirmar para mostrar el precio actualizado.
+- Las devoluciones ante proyecto rechazado son **automáticas**: el scheduler evalúa proyectos con plazo vencido y acredita el `saldo_idea` a cada inversor.
+- El campo `saldo_idea` en el usuario es el balance de tokens IDEA (moneda interna). Se descuenta al invertir y se acredita al reclamar dividendos o recibir reembolsos.

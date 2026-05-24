@@ -28,6 +28,7 @@ import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
+import com.systeam.tokenization.service.SubtokenService;
 
 @Service
 public class InvestmentService {
@@ -39,20 +40,20 @@ public class InvestmentService {
     private final InvestmentSwapService investmentSwapService;
     private final BlockchainProperties blockchainProperties;
     private final JdbcTemplate jdbc;
-    private final DynamicPricingService pricingService;
+    private final SubtokenService subtokenService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
                              InvestmentSwapService investmentSwapService,
                              BlockchainProperties blockchainProperties,
                              JdbcTemplate jdbc,
-                             DynamicPricingService pricingService) {
+                             SubtokenService subtokenService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.investmentSwapService = investmentSwapService;
         this.blockchainProperties = blockchainProperties;
         this.jdbc = jdbc;
-        this.pricingService = pricingService;
+        this.subtokenService = subtokenService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request) {
@@ -66,7 +67,7 @@ public class InvestmentService {
                     .build();
         }
 
-        Map<String, Object> subtoken = findSubtokenByProject(request.getProyectoId());
+        Map<String, Object> subtoken = subtokenService.findSubtokenByProject(request.getProyectoId());
         if (subtoken == null) {
             return ValidateInvestmentResponse.builder()
                     .valido(false)
@@ -79,7 +80,7 @@ public class InvestmentService {
         int suministroTotal = (int) subtoken.get("suministro_total");
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
-        BigDecimal precioSubtoken = pricingService.calcularPrecioDinamico(
+        BigDecimal precioSubtoken = subtokenService.calcularPrecio(
             precioBase, suministroTotal, cupoRestante, factorVolatilidad
         );
 
@@ -135,7 +136,7 @@ public class InvestmentService {
             throw new ConflictException("El proyecto no esta en estado de financiamiento");
         }
 
-        Map<String, Object> subtoken = findSubtokenByProject(request.getProyectoId());
+        Map<String, Object> subtoken = subtokenService.findSubtokenByProject(request.getProyectoId());
         if (subtoken == null) {
             throw new ConflictException("El proyecto no tiene un subtoken asociado para invertir");
         }
@@ -146,7 +147,7 @@ public class InvestmentService {
         int suministroTotal = (int) subtoken.get("suministro_total");
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
-        BigDecimal precioSubtoken = pricingService.calcularPrecioDinamico(
+        BigDecimal precioSubtoken = subtokenService.calcularPrecio(
             precioBase, suministroTotal, cupoRestante, factorVolatilidad
         );
 
@@ -196,6 +197,13 @@ public class InvestmentService {
             txHash = (String) txResult.get("txHash");
         }
 
+        Integer txHashCount = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM investments WHERE tx_hash = ?", Integer.class, txHash
+        );
+        if (txHashCount != null && txHashCount > 0) {
+            throw new ConflictException("La transaccion blockchain ya fue registrada");
+        }
+
         jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?",
             request.getMontoIdea(), usuarioId);
 
@@ -203,18 +211,12 @@ public class InvestmentService {
             request.getMontoIdea(), request.getProyectoId());
 
         int nuevoCupo = cupoRestante - subTokens;
-        BigDecimal nuevoPrecio = pricingService.calcularPrecioDinamico(
+        BigDecimal nuevoPrecio = subtokenService.calcularPrecio(
             precioBase, suministroTotal, nuevoCupo, factorVolatilidad
         );
-        jdbc.update("UPDATE subtokens SET cupo_restante = cupo_restante - ?, precio_actual = ? WHERE id = ?",
-            subTokens, nuevoPrecio, subtokenId);
+        subtokenService.updateQuotaAndPrice(subtokenId, subTokens, nuevoPrecio);
 
-        jdbc.update("""
-            INSERT INTO portfolio_activos (usuario_id, subtoken_id, cantidad, created_at, updated_at)
-            VALUES (?, ?, ?, NOW(), NOW())
-            ON CONFLICT (usuario_id, subtoken_id)
-            DO UPDATE SET cantidad = portfolio_activos.cantidad + ?, updated_at = NOW()
-            """, usuarioId, subtokenId, subTokens, subTokens);
+        subtokenService.addPortfolioEntry(usuarioId, subtokenId, subTokens);
 
         Usuario usuario = new Usuario();
         usuario.setId(usuarioId);
@@ -238,19 +240,28 @@ public class InvestmentService {
         Set<Long> proyectoIds = inversiones.stream()
             .map(i -> i.getProyecto().getId())
             .collect(Collectors.toSet());
-        Map<Long, String> titulos = buildTituloMap(proyectoIds);
-        return inversiones.map(inv -> toResponse(inv, titulos));
+        Map<Long, Map<String, String>> proyectoInfo = buildProyectoInfoMap(proyectoIds);
+        return inversiones.map(inv -> toResponse(inv, proyectoInfo));
     }
 
-    private Map<Long, String> buildTituloMap(Set<Long> proyectoIds) {
+    private Map<Long, Map<String, String>> buildProyectoInfoMap(Set<Long> proyectoIds) {
         if (proyectoIds.isEmpty()) return Map.of();
         String ids = proyectoIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         List<Map<String, Object>> rows = jdbc.query(
-            "SELECT id, titulo FROM projects WHERE id IN (" + ids + ")",
-            (rs, rowNum) -> Map.of("id", rs.getLong("id"), "titulo", rs.getString("titulo"))
+            "SELECT id, titulo, estado FROM projects WHERE id IN (" + ids + ")",
+            (rs, rowNum) -> {
+                java.util.HashMap<String, Object> m = new java.util.HashMap<>();
+                m.put("id", rs.getLong("id"));
+                m.put("titulo", rs.getString("titulo"));
+                m.put("estado", rs.getString("estado"));
+                return m;
+            }
         );
         return rows.stream()
-            .collect(Collectors.toMap(r -> (Long) r.get("id"), r -> (String) r.get("titulo")));
+            .collect(Collectors.toMap(
+                r -> (Long) r.get("id"),
+                r -> Map.of("titulo", (String) r.get("titulo"), "estado", (String) r.get("estado"))
+            ));
     }
 
     public InvestmentResponse getInvestmentById(Long id) {
@@ -293,12 +304,9 @@ public class InvestmentService {
                 inv.getMontoIdea(), inv.getUsuario().getId());
 
             if (inv.getSubTokensRecibidos() != null && inv.getSubTokensRecibidos() > 0) {
-                jdbc.update("""
-                    UPDATE portfolio_activos pa
-                    SET cantidad = GREATEST(pa.cantidad - ?, 0), updated_at = NOW()
-                    FROM subtokens s
-                    WHERE pa.subtoken_id = s.id AND s.proyecto_id = ? AND pa.usuario_id = ?
-                    """, inv.getSubTokensRecibidos(), proyectoId, inv.getUsuario().getId());
+                subtokenService.removePortfolioEntry(
+                    inv.getUsuario().getId(), proyectoId, inv.getSubTokensRecibidos()
+                );
             }
 
             inv.setEstado("REEMBOLSADA");
@@ -331,51 +339,42 @@ public class InvestmentService {
         return results.get(0);
     }
 
-    private Map<String, Object> findSubtokenByProject(Long proyectoId) {
-        List<Map<String, Object>> results = jdbc.query(
-            "SELECT id, cupo_restante, precio_actual, precio_base, suministro_total, " +
-            "factor_volatilidad, contract_address " +
-            "FROM subtokens WHERE proyecto_id = ?",
-            (rs, rowNum) -> {
-                Map<String, Object> m = new java.util.HashMap<>();
-                m.put("id", rs.getLong("id"));
-                m.put("cupo_restante", rs.getInt("cupo_restante"));
-                m.put("precio_actual", rs.getBigDecimal("precio_actual"));
-                m.put("precio_base", rs.getBigDecimal("precio_base"));
-                m.put("suministro_total", rs.getInt("suministro_total"));
-                m.put("factor_volatilidad", rs.getBigDecimal("factor_volatilidad"));
-                m.put("contract_address", rs.getString("contract_address"));
-                return m;
-            },
-            proyectoId
-        );
-        return results.isEmpty() ? null : results.get(0);
-    }
-
     private InvestmentResponse toResponse(Inversion inv) {
-        String proyectoTitulo = "";
+        String proyectoTitulo = "Proyecto #" + inv.getProyecto().getId();
+        String proyectoEstado = null;
         try {
-            proyectoTitulo = jdbc.queryForObject(
-                "SELECT titulo FROM projects WHERE id = ?", String.class, inv.getProyecto().getId()
+            List<Map<String, Object>> rows = jdbc.query(
+                "SELECT titulo, estado FROM projects WHERE id = ?",
+                (rs, rowNum) -> {
+                    java.util.HashMap<String, Object> m = new java.util.HashMap<>();
+                    m.put("titulo", rs.getString("titulo"));
+                    m.put("estado", rs.getString("estado"));
+                    return m;
+                },
+                inv.getProyecto().getId()
             );
-        } catch (Exception e) {
-            proyectoTitulo = "Proyecto #" + inv.getProyecto().getId();
-        }
-        return toResponse(inv, proyectoTitulo);
+            if (!rows.isEmpty()) {
+                proyectoTitulo = (String) rows.get(0).get("titulo");
+                proyectoEstado = (String) rows.get(0).get("estado");
+            }
+        } catch (Exception ignored) {}
+        return toResponse(inv, proyectoTitulo, proyectoEstado);
     }
 
-    private InvestmentResponse toResponse(Inversion inv, Map<Long, String> titulos) {
-        String proyectoTitulo = titulos.getOrDefault(inv.getProyecto().getId(),
-            "Proyecto #" + inv.getProyecto().getId());
-        return toResponse(inv, proyectoTitulo);
+    private InvestmentResponse toResponse(Inversion inv, Map<Long, Map<String, String>> proyectoInfo) {
+        Map<String, String> info = proyectoInfo.getOrDefault(inv.getProyecto().getId(), Map.of());
+        String proyectoTitulo = info.getOrDefault("titulo", "Proyecto #" + inv.getProyecto().getId());
+        String proyectoEstado = info.get("estado");
+        return toResponse(inv, proyectoTitulo, proyectoEstado);
     }
 
-    private InvestmentResponse toResponse(Inversion inv, String proyectoTitulo) {
+    private InvestmentResponse toResponse(Inversion inv, String proyectoTitulo, String proyectoEstado) {
         return InvestmentResponse.builder()
                 .id(inv.getId())
                 .usuarioId(inv.getUsuario() != null ? inv.getUsuario().getId() : null)
                 .proyectoId(inv.getProyecto() != null ? inv.getProyecto().getId() : null)
                 .proyectoTitulo(proyectoTitulo)
+                .proyectoEstado(proyectoEstado)
                 .montoIdea(inv.getMontoIdea())
                 .subTokensRecibidos(inv.getSubTokensRecibidos())
                 .txHash(inv.getTxHash())

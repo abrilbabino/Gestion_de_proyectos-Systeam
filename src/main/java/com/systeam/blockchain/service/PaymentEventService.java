@@ -84,6 +84,8 @@ public class PaymentEventService {
                 return;
             }
 
+            if (logResults == null) return;
+
             for (EthLog.LogResult result : logResults) {
                 Log logEntry = (Log) result.get();
                 if (logEntry != null) {
@@ -178,7 +180,7 @@ public class PaymentEventService {
 
             try {
                 Long investmentId = jdbc.queryForObject(
-                    "SELECT id FROM investments WHERE tx_hash = ? AND deleted_at IS NULL",
+                    "SELECT id FROM investments WHERE tx_hash = ?",
                     Long.class,
                     txHash
                 );
@@ -204,7 +206,7 @@ public class PaymentEventService {
             List<java.util.Map<String, Object>> pendientes = jdbc.queryForList(
                 "SELECT e.id, e.tx_hash FROM blockchain_eventos e " +
                 "WHERE e.procesado = FALSE " +
-                "AND EXISTS (SELECT 1 FROM investments i WHERE i.tx_hash = e.tx_hash AND i.deleted_at IS NULL)"
+                "AND EXISTS (SELECT 1 FROM investments i WHERE i.tx_hash = e.tx_hash)"
             );
 
             for (var row : pendientes) {
@@ -212,7 +214,7 @@ public class PaymentEventService {
                 String txHash = (String) row.get("tx_hash");
 
                 Long investmentId = jdbc.queryForObject(
-                    "SELECT id FROM investments WHERE tx_hash = ? AND deleted_at IS NULL",
+                    "SELECT id FROM investments WHERE tx_hash = ?",
                     Long.class, txHash
                 );
 

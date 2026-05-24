@@ -1,4 +1,4 @@
-package com.systeam.investment.service;
+package com.systeam.beneficios.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

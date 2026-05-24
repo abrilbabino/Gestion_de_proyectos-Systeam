@@ -1,4 +1,4 @@
-package com.systeam.investment.controller;
+package com.systeam.beneficios.controller;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.systeam.investment.service.DividendService;
+import com.systeam.beneficios.service.DividendService;
 import com.systeam.security.JwtPrincipal;
 
 @RestController

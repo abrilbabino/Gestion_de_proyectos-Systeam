@@ -23,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.systeam.investment.dto.CreateInvestmentRequest;
@@ -39,6 +38,7 @@ import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
+import com.systeam.tokenization.service.SubtokenService;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -54,7 +54,7 @@ class InvestmentServiceTest {
     private JdbcTemplate jdbc;
 
     @Mock
-    private DynamicPricingService pricingService;
+    private SubtokenService subtokenService;
 
     @Mock
     private InvestmentSwapService investmentSwapService;
@@ -65,6 +65,15 @@ class InvestmentServiceTest {
     @InjectMocks
     private InvestmentService investmentService;
 
+    private static final Map<String, Object> SUBTOKEN_EN_FINANCIAMIENTO = Map.of(
+        "id", 1L,
+        "cupo_restante", 100,
+        "precio_actual", new BigDecimal("10.00"),
+        "precio_base", new BigDecimal("10.00"),
+        "suministro_total", 1000,
+        "factor_volatilidad", new BigDecimal("0.50")
+    );
+
     private Proyecto proyectoFinanciamiento;
     private Inversion inversionBase;
 
@@ -72,8 +81,6 @@ class InvestmentServiceTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         when(blockchainProperties.getTreasuryAddress()).thenReturn("0x7eEA865D2f47B5cC0fF4c8967C1cCf667fEBE50A");
-        Usuario creador = new Usuario();
-        creador.setId(1L);
 
         proyectoFinanciamiento = new Proyecto();
         proyectoFinanciamiento.setId(1L);
@@ -107,19 +114,10 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of(Map.of(
-                "id", 1L,
-                "cupo_restante", 100,
-                "precio_actual", new BigDecimal("10.00"),
-                "precio_base", new BigDecimal("10.00"),
-                "suministro_total", 1000,
-                "factor_volatilidad", new BigDecimal("0.50")
             )));
 
-        when(pricingService.calcularPrecioDinamico(
-            any(BigDecimal.class), anyInt(), anyInt(), any(BigDecimal.class)
-        )).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
 
         ValidateInvestmentResponse response = investmentService.validateInvestment(request);
 
@@ -165,8 +163,9 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of());
+            )));
+
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(null);
 
         ValidateInvestmentResponse response = investmentService.validateInvestment(request);
 
@@ -188,19 +187,12 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of(Map.of(
-                "id", 1L,
-                "cupo_restante", 0,
-                "precio_actual", new BigDecimal("10.00"),
-                "precio_base", new BigDecimal("10.00"),
-                "suministro_total", 1000,
-                "factor_volatilidad", new BigDecimal("0.50")
             )));
 
-        when(pricingService.calcularPrecioDinamico(
-            any(BigDecimal.class), anyInt(), anyInt(), any(BigDecimal.class)
-        )).thenReturn(new BigDecimal("10.00"));
+        Map<String, Object> subtokenSinCupo = new java.util.HashMap<>(SUBTOKEN_EN_FINANCIAMIENTO);
+        subtokenSinCupo.put("cupo_restante", 0);
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(subtokenSinCupo);
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
 
         ValidateInvestmentResponse response = investmentService.validateInvestment(request);
 
@@ -238,19 +230,10 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of(Map.of(
-                "id", 1L,
-                "cupo_restante", 100,
-                "precio_actual", new BigDecimal("10.00"),
-                "precio_base", new BigDecimal("10.00"),
-                "suministro_total", 1000,
-                "factor_volatilidad", new BigDecimal("0.50")
             )));
 
-        when(pricingService.calcularPrecioDinamico(
-            any(BigDecimal.class), anyInt(), anyInt(), any(BigDecimal.class)
-        )).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
 
         when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
             .thenReturn(new BigDecimal("5000.00"));
@@ -258,8 +241,8 @@ class InvestmentServiceTest {
         when(investmentSwapService.invest(anyLong(), any(), any(), anyString()))
             .thenReturn("0xabc-swap-inv-05");
 
-        when(smartContractService.recordInvestment(anyLong(), anyLong(), any(BigDecimal.class), anyString()))
-            .thenReturn(Map.of("success", true, "txHash", "0xdef456"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), anyString()))
+            .thenReturn(0);
 
         when(jdbc.update(anyString(), any(), any())).thenReturn(1);
         when(jdbc.update(anyString(), any(), any(), any())).thenReturn(1);
@@ -272,8 +255,14 @@ class InvestmentServiceTest {
             return saved;
         });
 
-        when(jdbc.queryForObject(anyString(), eq(String.class), anyLong()))
-            .thenReturn("Proyecto Test");
+        when(jdbc.query(anyString(), any(RowMapper.class), anyLong()))
+            .thenReturn(List.of(Map.of(
+                "id", 1L,
+                "titulo", "Proyecto Test",
+                "estado", "FINANCIAMIENTO",
+                "montoRequerido", new BigDecimal("10000.00"),
+                "montoRecaudado", new BigDecimal("0.00")
+            )));
 
         InvestmentResponse response = investmentService.createInvestment(request, 2L);
 
@@ -321,8 +310,9 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of());
+            )));
+
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(null);
 
         assertThatThrownBy(() -> investmentService.createInvestment(request, 2L))
                 .isInstanceOf(ConflictException.class)
@@ -344,19 +334,12 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of(Map.of(
-                "id", 1L,
-                "cupo_restante", 10,
-                "precio_actual", new BigDecimal("10.00"),
-                "precio_base", new BigDecimal("10.00"),
-                "suministro_total", 1000,
-                "factor_volatilidad", new BigDecimal("0.50")
             )));
 
-        when(pricingService.calcularPrecioDinamico(
-            any(BigDecimal.class), anyInt(), anyInt(), any(BigDecimal.class)
-        )).thenReturn(new BigDecimal("10.00"));
+        Map<String, Object> subtokenPocoCupo = new java.util.HashMap<>(SUBTOKEN_EN_FINANCIAMIENTO);
+        subtokenPocoCupo.put("cupo_restante", 10);
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(subtokenPocoCupo);
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
 
         assertThatThrownBy(() -> investmentService.createInvestment(request, 2L))
                 .isInstanceOf(ConflictException.class)
@@ -378,19 +361,10 @@ class InvestmentServiceTest {
                 "estado", "FINANCIAMIENTO",
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("0.00")
-            )))
-            .thenReturn(List.of(Map.of(
-                "id", 1L,
-                "cupo_restante", 100,
-                "precio_actual", new BigDecimal("10.00"),
-                "precio_base", new BigDecimal("10.00"),
-                "suministro_total", 1000,
-                "factor_volatilidad", new BigDecimal("0.50")
             )));
 
-        when(pricingService.calcularPrecioDinamico(
-            any(BigDecimal.class), anyInt(), anyInt(), any(BigDecimal.class)
-        )).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
 
         when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
             .thenReturn(new BigDecimal("100.00"));
@@ -435,9 +409,9 @@ class InvestmentServiceTest {
             .thenReturn(Map.of("success", true));
 
         when(jdbc.update(anyString(), any(), any())).thenReturn(1);
-    
+
         when(investmentRepository.save(any(Inversion.class))).thenReturn(inversionBase);
-    
+
         investmentService.processExpiredProjects();
 
         verify(investmentRepository).save(any(Inversion.class));
