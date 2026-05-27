@@ -1,12 +1,15 @@
 package com.systeam.tokenization.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+
+import com.systeam.tokenization.dto.SubtokenPriceResponse;
 
 @Service
 public class SubtokenService {
@@ -40,8 +43,76 @@ public class SubtokenService {
         return results.isEmpty() ? null : results.get(0);
     }
 
-    public BigDecimal calcularPrecio(BigDecimal precioBase, int suministroTotal, int cupoRestante, BigDecimal factorVolatilidad) {
-        return pricingService.calcularPrecioDinamico(precioBase, suministroTotal, cupoRestante, factorVolatilidad);
+    public BigDecimal calcularPrecio(BigDecimal precioBase, int suministroTotal, int cupoRestante,
+                                      BigDecimal factorVolatilidad, Long proyectoId) {
+        BigDecimal factorRendimiento = obtenerFactorRendimiento(proyectoId);
+        return pricingService.calcularPrecioDinamico(
+            precioBase, suministroTotal, cupoRestante, factorVolatilidad, factorRendimiento
+        );
+    }
+
+    public SubtokenPriceResponse obtenerPrecioConDetalle(Long proyectoId) {
+        Map<String, Object> subtoken = findSubtokenByProject(proyectoId);
+        if (subtoken == null) return null;
+
+        BigDecimal precioBase = (BigDecimal) subtoken.get("precio_base");
+        int suministroTotal = (int) subtoken.get("suministro_total");
+        int cupoRestante = (int) subtoken.get("cupo_restante");
+        BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
+
+        int vendidos = suministroTotal - cupoRestante;
+        BigDecimal demandaRelativa = suministroTotal > 0
+            ? BigDecimal.valueOf(vendidos).divide(BigDecimal.valueOf(suministroTotal), 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+        BigDecimal factorDemanda = demandaRelativa.multiply(factorVolatilidad);
+
+        BigDecimal factorRendimiento = obtenerFactorRendimiento(proyectoId);
+        BigDecimal precio = calcularPrecio(precioBase, suministroTotal, cupoRestante, factorVolatilidad, proyectoId);
+
+        return new SubtokenPriceResponse(proyectoId, precio, precioBase,
+            suministroTotal, cupoRestante, factorDemanda, factorRendimiento);
+    }
+
+    public BigDecimal obtenerFactorRendimiento(Long proyectoId) {
+        List<Map<String, Object>> rows = jdbc.query(
+            "SELECT estado, monto_requerido, COALESCE(monto_recaudado, 0) AS monto_recaudado " +
+            "FROM projects WHERE id = ?",
+            (rs, rowNum) -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("estado", rs.getString("estado"));
+                m.put("monto_requerido", rs.getBigDecimal("monto_requerido"));
+                m.put("monto_recaudado", rs.getBigDecimal("monto_recaudado"));
+                return m;
+            },
+            proyectoId
+        );
+        if (rows.isEmpty()) return BigDecimal.ZERO;
+
+        Map<String, Object> project = rows.get(0);
+        String estado = (String) project.get("estado");
+
+        switch (estado) {
+            case "PREPARACION":
+                return new BigDecimal("0.00");
+            case "FINANCIAMIENTO": {
+                BigDecimal montoRecaudado = (BigDecimal) project.get("monto_recaudado");
+                BigDecimal montoRequerido = (BigDecimal) project.get("monto_requerido");
+                if (montoRequerido == null || montoRequerido.compareTo(BigDecimal.ZERO) <= 0) {
+                    return new BigDecimal("0.15");
+                }
+                BigDecimal progreso = montoRecaudado.divide(montoRequerido, 4, RoundingMode.HALF_UP);
+                // Factor base 0.15 + hasta 0.20 extra por progreso de financiamiento
+                return new BigDecimal("0.15").add(
+                    progreso.multiply(new BigDecimal("0.20"))
+                ).min(new BigDecimal("0.35"));
+            }
+            case "EJECUCION":
+                return new BigDecimal("0.50");
+            case "FINALIZADO":
+                return new BigDecimal("0.75");
+            default:
+                return BigDecimal.ZERO;
+        }
     }
 
     public void updateQuotaAndPrice(Long subtokenId, int subTokens, BigDecimal nuevoPrecio) {

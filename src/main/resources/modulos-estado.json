@@ -209,10 +209,10 @@
         },
         {
           "nombre": "Endpoint de cotización",
-          "estado": "pendiente",
+          "estado": "hecho",
           "descripcion": "Calcular precio dinámico según oferta/demanda y rendimiento del proyecto",
           "dependencias": ["BDD: Tablas de libro de órdenes", "Tokenización: DynamicPricingService"],
-          "entregables": ["GET /api/marketplace/quote", "Fórmula de pricing dinámico", "MKT-02"],
+          "entregables": ["GET /api/marketplace/quote", "Fórmula de pricing dinámico + factor rendimiento", "MKT-02"],
           "prioridad": "Media"
         },
         {

@@ -572,6 +572,6 @@ GET /api/dashboard/stats
 ## Notas de integración
 
 - El token JWT se obtiene en `http://localhost:8080/auth/login` y es válido para todos los módulos.
-- El precio de los subtokens es **dinámico**: sube a medida que se venden tokens (oferta/demanda). Usar `/api/investments/validate` antes de confirmar para mostrar el precio actualizado.
+- El precio de los subtokens es **dinámico**: sube según oferta/demanda (a más vendidos, más caro) **y** según el rendimiento del proyecto (a más avanzado, más caro). Usar `/api/investments/validate` antes de confirmar para mostrar el precio actualizado.
 - Las devoluciones ante proyecto rechazado son **automáticas**: el scheduler evalúa proyectos con plazo vencido y acredita el `saldo_idea` a cada inversor.
 - El campo `saldo_idea` en el usuario es el balance de tokens IDEA (moneda interna). Se descuenta al invertir y se acredita al reclamar dividendos o recibir reembolsos.

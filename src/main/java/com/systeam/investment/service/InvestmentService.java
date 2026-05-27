@@ -86,7 +86,7 @@ public class InvestmentService {
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
         BigDecimal precioSubtoken = subtokenService.calcularPrecio(
-            precioBase, suministroTotal, cupoRestante, factorVolatilidad
+            precioBase, suministroTotal, cupoRestante, factorVolatilidad, request.getProyectoId()
         );
 
         if (cupoRestante <= 0) {
@@ -153,7 +153,7 @@ public class InvestmentService {
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
         BigDecimal precioSubtoken = subtokenService.calcularPrecio(
-            precioBase, suministroTotal, cupoRestante, factorVolatilidad
+            precioBase, suministroTotal, cupoRestante, factorVolatilidad, request.getProyectoId()
         );
 
         int subTokens = request.getMontoIdea()
@@ -235,7 +235,7 @@ public class InvestmentService {
 
         int nuevoCupo = cupoRestante - subTokens;
         BigDecimal nuevoPrecio = subtokenService.calcularPrecio(
-            precioBase, suministroTotal, nuevoCupo, factorVolatilidad
+            precioBase, suministroTotal, nuevoCupo, factorVolatilidad, request.getProyectoId()
         );
         subtokenService.updateQuotaAndPrice(subtokenId, subTokens, nuevoPrecio);
 
