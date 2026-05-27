@@ -154,6 +154,21 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         return investors[proyectoId];
     }
 
+    function getInvestorsPaginated(uint256 proyectoId, uint256 offset, uint256 limit)
+        external view returns (address[] memory result, uint256 total)
+    {
+        address[] storage invs = investors[proyectoId];
+        total = invs.length;
+        if (offset >= total) return (new address[](0), total);
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        uint256 resultCount = end - offset;
+        result = new address[](resultCount);
+        for (uint256 i = 0; i < resultCount; i++) {
+            result[i] = invs[offset + i];
+        }
+    }
+
     function getContribution(uint256 proyectoId, address investor) external view returns (uint256) {
         return contributions[proyectoId][investor];
     }

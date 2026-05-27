@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
     "solc": "^0.8.20"
   }
 }
