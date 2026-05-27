@@ -1,6 +1,7 @@
 package com.systeam.beneficios.service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 
@@ -20,9 +22,11 @@ public class DividendService {
     private static final Logger log = LoggerFactory.getLogger(DividendService.class);
 
     private final JdbcTemplate jdbc;
+    private final DividendDistributorService dividendDistributorService;
 
-    public DividendService(JdbcTemplate jdbc) {
+    public DividendService(JdbcTemplate jdbc, DividendDistributorService dividendDistributorService) {
         this.jdbc = jdbc;
+        this.dividendDistributorService = dividendDistributorService;
     }
 
     @Transactional
@@ -42,6 +46,21 @@ public class DividendService {
             );
         }
 
+        // 1. Intentar distribuir on-chain via DividendDistributor
+        try {
+            BigInteger montoWei = montoTotal
+                .multiply(new BigDecimal("1000000000000000000"))
+                .toBigInteger();
+            String txHash = dividendDistributorService.distribute(
+                BigInteger.valueOf(proyectoId), montoWei
+            );
+            log.info("Dividendos distribuidos on-chain: proyecto={}, tx={}", proyectoId, txHash);
+        } catch (Exception e) {
+            log.warn("DividendDistributor no disponible (on-chain): {}. " +
+                     "Guardando solo en DB.", e.getMessage());
+        }
+
+        // 2. Guardar en DB como registro histórico
         Integer totalSubtokensColocados = jdbc.queryForObject(
             "SELECT COALESCE(SUM(pa.cantidad), 0) FROM portfolio_activos pa " +
             "JOIN subtokens s ON pa.subtoken_id = s.id WHERE s.proyecto_id = ?",
@@ -70,14 +89,30 @@ public class DividendService {
     }
 
     @Transactional
-    public void reclamarDividendos(Long dividendoId, Long usuarioId) {
-        Map<String, Object> dividendo = jdbc.queryForMap(
-            "SELECT id, proyecto_id, monto_total, monto_por_subtoken, fecha_reparto, created_at FROM dividendos WHERE id = ?", dividendoId
-        );
+    public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet) {
+        // 1. Intentar reclamar on-chain via DividendDistributor
+        if (wallet != null && !wallet.isBlank()) {
+            try {
+                BigInteger claimable = dividendDistributorService.getClaimable(
+                    BigInteger.valueOf(proyectoId), wallet
+                );
+                if (claimable.compareTo(BigInteger.ZERO) > 0) {
+                    String txHash = dividendDistributorService.claim(
+                        BigInteger.valueOf(proyectoId)
+                    );
+                    log.info("Dividendos reclamados on-chain: proyecto={}, wallet={}, tx={}",
+                        proyectoId, wallet, txHash);
+                } else {
+                    log.info("No hay dividendos pendientes on-chain para proyecto={}, wallet={}",
+                        proyectoId, wallet);
+                }
+            } catch (Exception e) {
+                log.warn("DividendDistributor.claim() no disponible: {}. " +
+                         "Usando fallback DB.", e.getMessage());
+            }
+        }
 
-        Long proyectoId = ((Number) dividendo.get("proyecto_id")).longValue();
-        BigDecimal montoPorSubtoken = (BigDecimal) dividendo.get("monto_por_subtoken");
-
+        // 2. Calcular y acreditar via DB (registro histórico + saldo_idea)
         List<Map<String, Object>> activos = jdbc.query(
             "SELECT pa.subtoken_id, pa.cantidad, s.nombre " +
             "FROM portfolio_activos pa " +
@@ -95,6 +130,16 @@ public class DividendService {
             throw new ConflictException("No tienes subtokens en este proyecto");
         }
 
+        BigDecimal montoPorSubtoken = jdbc.queryForObject(
+            "SELECT COALESCE(monto_por_subtoken, 0) FROM dividendos WHERE proyecto_id = ? " +
+            "ORDER BY created_at DESC LIMIT 1",
+            BigDecimal.class, proyectoId
+        );
+
+        if (montoPorSubtoken == null || montoPorSubtoken.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ConflictException("No hay dividendos registrados para este proyecto");
+        }
+
         for (Map<String, Object> activo : activos) {
             Long subtokenId = (Long) activo.get("subtokenId");
             Integer cantidad = (Integer) activo.get("cantidad");
@@ -105,15 +150,28 @@ public class DividendService {
             jdbc.update("""
                 INSERT INTO reclamos_dividendos (dividendo_id, usuario_id, subtoken_id,
                     cantidad_subtokens, monto_recibido, reclamado_en)
-                VALUES (?, ?, ?, ?, ?, NOW())
-                """, dividendoId, usuarioId, subtokenId, cantidad, montoRecibido);
+                VALUES ((SELECT id FROM dividendos WHERE proyecto_id = ? ORDER BY created_at DESC LIMIT 1),
+                    ?, ?, ?, ?, NOW())
+                """, proyectoId, usuarioId, subtokenId, cantidad, montoRecibido);
 
             jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?",
                 montoRecibido, usuarioId);
         }
 
-        log.info("Dividendos reclamados: dividendo={}, usuario={}, activos={}",
-                dividendoId, usuarioId, activos.size());
+        log.info("Dividendos reclamados: proyecto={}, usuario={}",
+                proyectoId, usuarioId);
+    }
+
+    public BigInteger consultarDividendosPendientes(Long proyectoId, String wallet) {
+        if (wallet == null || wallet.isBlank()) return BigInteger.ZERO;
+        try {
+            return dividendDistributorService.getClaimable(
+                BigInteger.valueOf(proyectoId), wallet
+            );
+        } catch (Exception e) {
+            log.warn("No se pudo consultar dividendos pendientes: {}", e.getMessage());
+            return BigInteger.ZERO;
+        }
     }
 
     public List<Map<String, Object>> listarRepartos(Long proyectoId) {

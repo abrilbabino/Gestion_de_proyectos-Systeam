@@ -1,6 +1,7 @@
 package com.systeam.beneficios.controller;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 
@@ -44,14 +45,28 @@ public class DividendController {
         return dividendService.listarRepartos(proyectoId);
     }
 
-    @PostMapping("/{dividendoId}/reclamar")
+    @PostMapping("/proyecto/{proyectoId}/reclamar")
     @ResponseStatus(HttpStatus.OK)
     @PreAuthorize("hasAuthority('investment:read')")
-    public Map<String, String> reclamarDividendos(
-            @PathVariable Long dividendoId,
-            @AuthenticationPrincipal JwtPrincipal principal) {
-        dividendService.reclamarDividendos(dividendoId, principal.userId());
-        return Map.of("mensaje", "Dividendos reclamados exitosamente");
+    public Map<String, Object> reclamarDividendos(
+            @PathVariable Long proyectoId,
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @RequestParam(required = false) String wallet) {
+        dividendService.reclamarDividendos(proyectoId, principal.userId(), wallet);
+        BigInteger pendientes = dividendService.consultarDividendosPendientes(proyectoId, wallet);
+        return Map.of(
+            "mensaje", "Dividendos reclamados exitosamente",
+            "pendientes", pendientes
+        );
+    }
+
+    @GetMapping("/proyecto/{proyectoId}/pendientes")
+    @PreAuthorize("hasAuthority('investment:read')")
+    public Map<String, Object> dividendosPendientes(
+            @PathVariable Long proyectoId,
+            @RequestParam String wallet) {
+        BigInteger pendientes = dividendService.consultarDividendosPendientes(proyectoId, wallet);
+        return Map.of("pendientes", pendientes);
     }
 
     @GetMapping("/mis-reclamos")

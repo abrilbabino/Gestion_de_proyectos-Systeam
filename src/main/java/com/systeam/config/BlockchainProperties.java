@@ -13,6 +13,15 @@ public class BlockchainProperties {
     private String privateKey;
     private String tokenFactoryAddress;
     private String investmentSwapAddress;
+    private String ideaTokenAddress;
+    private String ideafyFactoryAddress;
+    private String offeringContractAddress;
+    private String dividendDistributorAddress;
+    private String ideaSwapAddress;
+    private String ideaMarketplaceAddress;
+    private String ideaGovernanceAddress;
+    private int eventPollInterval;
+    private int eventReconcileInterval;
 
     public String getRpcUrl() { return rpcUrl; }
     public void setRpcUrl(String rpcUrl) { this.rpcUrl = rpcUrl; }
@@ -37,4 +46,31 @@ public class BlockchainProperties {
 
     public String getInvestmentSwapAddress() { return investmentSwapAddress; }
     public void setInvestmentSwapAddress(String investmentSwapAddress) { this.investmentSwapAddress = investmentSwapAddress; }
+
+    public String getIdeaTokenAddress() { return ideaTokenAddress; }
+    public void setIdeaTokenAddress(String ideaTokenAddress) { this.ideaTokenAddress = ideaTokenAddress; }
+
+    public String getIdeafyFactoryAddress() { return ideafyFactoryAddress; }
+    public void setIdeafyFactoryAddress(String ideafyFactoryAddress) { this.ideafyFactoryAddress = ideafyFactoryAddress; }
+
+    public String getOfferingContractAddress() { return offeringContractAddress; }
+    public void setOfferingContractAddress(String offeringContractAddress) { this.offeringContractAddress = offeringContractAddress; }
+
+    public String getDividendDistributorAddress() { return dividendDistributorAddress; }
+    public void setDividendDistributorAddress(String dividendDistributorAddress) { this.dividendDistributorAddress = dividendDistributorAddress; }
+
+    public String getIdeaSwapAddress() { return ideaSwapAddress; }
+    public void setIdeaSwapAddress(String ideaSwapAddress) { this.ideaSwapAddress = ideaSwapAddress; }
+
+    public String getIdeaMarketplaceAddress() { return ideaMarketplaceAddress; }
+    public void setIdeaMarketplaceAddress(String ideaMarketplaceAddress) { this.ideaMarketplaceAddress = ideaMarketplaceAddress; }
+
+    public String getIdeaGovernanceAddress() { return ideaGovernanceAddress; }
+    public void setIdeaGovernanceAddress(String ideaGovernanceAddress) { this.ideaGovernanceAddress = ideaGovernanceAddress; }
+
+    public int getEventPollInterval() { return eventPollInterval; }
+    public void setEventPollInterval(int eventPollInterval) { this.eventPollInterval = eventPollInterval; }
+
+    public int getEventReconcileInterval() { return eventReconcileInterval; }
+    public void setEventReconcileInterval(int eventReconcileInterval) { this.eventReconcileInterval = eventReconcileInterval; }
 }

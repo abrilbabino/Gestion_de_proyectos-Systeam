@@ -1,6 +1,7 @@
 package com.systeam.investment.service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.systeam.blockchain.service.InvestmentSwapService;
+import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.config.BlockchainProperties;
 import com.systeam.investment.dto.CreateInvestmentRequest;
 import com.systeam.investment.dto.InvestmentResponse;
@@ -38,6 +40,7 @@ public class InvestmentService {
     private final InvestmentRepository investmentRepository;
     private final SmartContractService smartContractService;
     private final InvestmentSwapService investmentSwapService;
+    private final OfferingContractService offeringContractService;
     private final BlockchainProperties blockchainProperties;
     private final JdbcTemplate jdbc;
     private final SubtokenService subtokenService;
@@ -45,12 +48,14 @@ public class InvestmentService {
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
                              InvestmentSwapService investmentSwapService,
+                             OfferingContractService offeringContractService,
                              BlockchainProperties blockchainProperties,
                              JdbcTemplate jdbc,
                              SubtokenService subtokenService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.investmentSwapService = investmentSwapService;
+        this.offeringContractService = offeringContractService;
         this.blockchainProperties = blockchainProperties;
         this.jdbc = jdbc;
         this.subtokenService = subtokenService;
@@ -173,28 +178,46 @@ public class InvestmentService {
 
         String txHash;
         boolean swapOnChain = false;
+
+        // 1. Intentar con OfferingContract (contrato nuevo con soft/hard cap)
         try {
-            BigDecimal montoIdeaWei = request.getMontoIdea()
-                .multiply(new BigDecimal("1000000000000000000"));
-            BigDecimal subTokenAmountWei = BigDecimal.valueOf(subTokens)
-                .multiply(new BigDecimal("1000000000000000000"));
+            BigInteger montoIdeaWei = request.getMontoIdea()
+                .multiply(new BigDecimal("1000000000000000000"))
+                .toBigInteger();
 
-            String treasuryAddress = blockchainProperties.getTreasuryAddress();
-
-            txHash = investmentSwapService.invest(
-                request.getProyectoId(),
-                montoIdeaWei.toBigInteger(),
-                subTokenAmountWei.toBigInteger(),
-                treasuryAddress
+            txHash = offeringContractService.invest(
+                BigInteger.valueOf(request.getProyectoId()),
+                montoIdeaWei
             );
             swapOnChain = true;
-            log.info("INV-05: Swap on-chain exitoso. Tx: {}", txHash);
+            log.info("Inversion via OfferingContract exitosa. Tx: {}", txHash);
         } catch (Exception e) {
-            log.warn("INV-05: Swap on-chain no disponible. Fallback a DB-only. Error: {}", e.getMessage());
-            Map<String, Object> txResult = smartContractService.recordInvestment(
-                request.getProyectoId(), usuarioId, request.getMontoIdea(), request.getTxHash()
-            );
-            txHash = (String) txResult.get("txHash");
+            log.warn("OfferingContract no disponible: {}. Probando con InvestmentSwap.", e.getMessage());
+
+            // 2. Fallback a InvestmentSwap (contrato legacy)
+            try {
+                BigDecimal montoIdeaWei = request.getMontoIdea()
+                    .multiply(new BigDecimal("1000000000000000000"));
+                BigDecimal subTokenAmountWei = BigDecimal.valueOf(subTokens)
+                    .multiply(new BigDecimal("1000000000000000000"));
+
+                String treasuryAddress = blockchainProperties.getTreasuryAddress();
+
+                txHash = investmentSwapService.invest(
+                    request.getProyectoId(),
+                    montoIdeaWei.toBigInteger(),
+                    subTokenAmountWei.toBigInteger(),
+                    treasuryAddress
+                );
+                swapOnChain = true;
+                log.info("INV-05: Swap on-chain exitoso. Tx: {}", txHash);
+            } catch (Exception e2) {
+                log.warn("INV-05: Swap on-chain no disponible. Fallback a DB-only. Error: {}", e2.getMessage());
+                Map<String, Object> txResult = smartContractService.recordInvestment(
+                    request.getProyectoId(), usuarioId, request.getMontoIdea(), request.getTxHash()
+                );
+                txHash = (String) txResult.get("txHash");
+            }
         }
 
         Integer txHashCount = jdbc.queryForObject(
@@ -383,4 +406,5 @@ public class InvestmentService {
                 .updatedAt(inv.getUpdatedAt())
                 .build();
     }
+
 }
