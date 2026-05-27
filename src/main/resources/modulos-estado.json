@@ -519,5 +519,59 @@
         }
       ]
     }
+    },
+    {
+      "nombre": "Gobernanza",
+      "etapas": [
+        {
+          "nombre": "Smart Contract IdeaGovernance",
+          "estado": "hecho",
+          "descripcion": "Contrato con createProposal, vote, executeProposal. Requiere ≥ 1000 IDEA para proponer, quorum 10%",
+          "dependencias": ["Blockchain: contratos deployados"],
+          "entregables": ["IdeaGovernance.sol", "AccessControl (ADMIN_ROLE, EXECUTOR_ROLE)"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "IdeaGovernanceService (Web3j)",
+          "estado": "hecho",
+          "descripcion": "Servicio Java con createProposal(), vote(), executeProposal(), getProposalCount(), getProposal(). Corregido: usa proposalCounter() no getProposalCount()",
+          "dependencias": ["Smart Contract IdeaGovernance"],
+          "entregables": ["IdeaGovernanceService.java", "RawTransactionManager + ethCall"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "BDD: Tabla proposals + Flyway V18",
+          "estado": "hecho",
+          "descripcion": "Tabla proposals con on_chain_id, proposer_user_id, title, description, for_votes, against_votes, tx_hash, status",
+          "dependencias": ["Auth: tabla users"],
+          "entregables": ["V18__create_governance_tables.sql"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "GovernanceService (off-chain DB layer)",
+          "estado": "hecho",
+          "descripcion": "CRUD de propuestas en PostgreSQL, paginación, filtro por status, sincronización de votos on-chain → off-chain",
+          "dependencias": ["BDD: Tabla proposals + Flyway V18"],
+          "entregables": ["GovernanceService.java", "ProposalResponse DTO"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "GovernanceController",
+          "estado": "hecho",
+          "descripcion": "REST API completa: POST /proposals, POST /vote, POST /proposals/{id}/execute, GET /proposals, GET /proposals/{id}, GET /count",
+          "dependencias": ["GovernanceService", "IdeaGovernanceService"],
+          "entregables": ["GovernanceController.java", "CreateProposalRequest DTO", "VoteRequest DTO"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Documentación Stage 6",
+          "estado": "hecho",
+          "descripcion": "docs/STAGE6_GOVERNANCE_API.md: arquitectura two-tier, errores comunes, flujo completo, próximos pasos",
+          "dependencias": ["GovernanceController"],
+          "entregables": ["STAGE6_GOVERNANCE_API.md"],
+          "prioridad": "Alta"
+        }
+      ]
+    }
   ]
 }
