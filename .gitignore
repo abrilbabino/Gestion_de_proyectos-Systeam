@@ -34,6 +34,7 @@ build/
 .vscode/
 
 .env
+/docs
 
 # Blockchain
 blockchain/node_modules/

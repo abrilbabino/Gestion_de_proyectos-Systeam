@@ -1,87 +1,39 @@
 {
   "modulos": [
     {
-      "nombre": "Inversión",
+      "nombre": "Auth (Ulises)",
       "etapas": [
         {
-          "nombre": "Validar persona",
+          "nombre": "Login email + JWT",
           "estado": "hecho",
-          "descripcion": "Verificar que el usuario existe, está autenticado (JWT) y tiene permiso 'investment:create'",
-          "dependencias": ["Módulo Auth (login + JWT)", "Roles y permisos"],
-          "entregables": ["InvestmentController con @PreAuthorize", "AuthServiceClient valida token contra Ulises"],
+          "descripcion": "Endpoint POST /auth/login con email/password. Devuelve accessToken + refreshToken",
+          "dependencias": [],
+          "entregables": ["AuthController", "JwtProvider", "BCrypt"],
           "prioridad": "Alta"
         },
         {
-          "nombre": "Registrar inversión en DB",
+          "nombre": "Google OAuth2",
           "estado": "hecho",
-          "descripcion": "Guardar la inversión en tabla investments con monto, proyecto_id, usuario_id, estado, created_at",
-          "dependencias": ["Validar persona", "Tabla investments creada (Flyway V1..V12)"],
-          "entregables": ["JdbcInvestmentRepository", "InvestmentService.createInvestment()", "Migration Flyway"],
+          "descripcion": "Login con Google. Redirección a /oauth2/authorization/google",
+          "dependencias": ["Login email + JWT"],
+          "entregables": ["OAuth2 config", "Callback handler"],
           "prioridad": "Alta"
         },
         {
-          "nombre": "Actualizar saldo proyecto",
+          "nombre": "Roles y permisos",
           "estado": "hecho",
-          "descripcion": "Sumar el monto invertido al monto_recaudado del proyecto en DB. Validar que no supere el monto_requerido",
-          "dependencias": ["Registrar inversión en DB"],
-          "entregables": ["UPDATE projects SET monto_recaudado = monto_recaudado + ?"],
+          "descripcion": "Roles: USER, ADMIN, CREATOR. Permisos: project:create, investment:create, tokenization:read, etc.",
+          "dependencias": ["Login email + JWT"],
+          "entregables": ["RoleService", "PermissionService"],
           "prioridad": "Alta"
         },
         {
-          "nombre": "Swap atómico on-chain",
+          "nombre": "Refresh token",
           "estado": "hecho",
-          "descripcion": "InvestmentSwap.invest() ejecuta transferFrom($IDEA) + mint(sub-tokens) + evento en una sola tx. Web3j firma con private key del backend",
-          "dependencias": ["InvestmentSwap v3 deployado en Sepolia", "IDEA Token deployado", "ProjectToken creado al publicar proyecto"],
-          "entregables": ["InvestmentSwap.sol invest()", "InvestmentSwapService.java (Web3j)", "Fallback a DB si Sepolia falla"],
+          "descripcion": "Endpoint POST /auth/refresh. Refresh token dura 7 días",
+          "dependencias": ["Login email + JWT"],
+          "entregables": ["Refresh token rotation"],
           "prioridad": "Alta"
-        },
-        {
-          "nombre": "Refund / Devolución",
-          "estado": "hecho",
-          "descripcion": "Cuando un proyecto vence sin alcanzar la meta: quemar sub-tokens on-chain (burnFrom), actualizar inversión a REEMBOLSADA en DB, proyecto a RECHAZADO",
-          "dependencias": ["Swap atómico on-chain", "Migration V13 (RECHAZADO)"],
-          "entregables": ["InvestmentSwap.refund()", "InvestmentScheduler @Scheduled 6AM", "Refund on-chain + DB"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Historial de inversiones",
-          "estado": "hecho",
-          "descripcion": "GET /api/investments/history con paginación, filtro por usuario autenticado, joins con projects para mostrar título",
-          "dependencias": ["Registrar inversión en DB", "Módulo Proyecto"],
-          "entregables": ["InvestmentController.getHistory()", "N+1 eliminado con buildTituloMap()", "DTO con txHash, monto, proyecto, fecha"],
-          "prioridad": "Media"
-        },
-        {
-          "nombre": "Precio dinámico",
-          "estado": "hecho",
-          "descripcion": "Calcular precio del sub-token según demanda: precioBase × (1 + (vendidos/total) × volatilidad). Los primeros inversores pagan menos",
-          "dependencias": ["Registrar inversión en DB", "Tabla subtokens con precio_base y factor_volatilidad"],
-          "entregables": ["DynamicPricingService.calcularPrecioDinamico()", "Fórmula integrada en InvestmentService"],
-          "prioridad": "Media"
-        },
-        {
-          "nombre": "Scheduler cierre automático",
-          "estado": "hecho",
-          "descripcion": "Evaluar proyectos vencidos cada 6 AM. Si no alcanzaron meta → refund on-chain + RECHAZADO. Si alcanzaron → FINALIZADO",
-          "dependencias": ["Refund / Devolución", "Migration V13"],
-          "entregables": ["InvestmentScheduler.processExpiredProjects()", "Integración con InvestmentSwap.refund()"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Simulación sin blockchain",
-          "estado": "pendiente",
-          "descripcion": "Poder probar el flujo completo de inversión sin conectarse a Sepolia. Usar un mock de InvestmentSwapService o una flag 'simulacion=true'",
-          "dependencias": ["Todos los puntos anteriores"],
-          "entregables": ["MockInvestmentSwapService", "Profile 'simulacion' en application.properties", "Tests sin RPC"],
-          "prioridad": "Media"
-        },
-        {
-          "nombre": "Marketplace secundario",
-          "estado": "pendiente",
-          "descripcion": "Permitir que inversores compren/vendan sub-tokens entre ellos. Contrato Marketplace con order book y fee automático para la plataforma",
-          "dependencias": ["Swap atómico on-chain", "WalletService"],
-          "entregables": ["Marketplace.sol", "MarketplaceService.java", "Endpoint POST /api/marketplace/orders"],
-          "prioridad": "Baja"
         }
       ]
     },
@@ -91,108 +43,415 @@
         {
           "nombre": "CRUD proyectos",
           "estado": "hecho",
-          "descripcion": "Crear, leer, actualizar proyectos en DB. Validaciones: título obligatorio, monto > 0, descripción max 8000 chars",
-          "dependencias": ["Módulo Auth"],
+          "descripcion": "Crear, leer, actualizar proyectos en DB. Validaciones: título, monto > 0, descripción",
+          "dependencias": ["Auth: Login + roles"],
           "entregables": ["ProjectController (POST/PUT/GET)", "ProjectService", "JdbcProjectRepository"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Máquina de estados",
           "estado": "hecho",
-          "descripcion": "Transiciones: PREPARACION → FINANCIAMIENTO → EJECUCION/FINALIZADO. Validar que no se salten pasos",
+          "descripcion": "Transiciones: PREPARACION → FINANCIAMIENTO → EJECUCION → FINALIZADO / CANCELADO / RECHAZADO",
           "dependencias": ["CRUD proyectos"],
-          "entregables": ["isValidTransition() en ProjectService", "ConflictException si transición inválida"],
+          "entregables": ["isValidTransition() en ProjectService", "ConflictException"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Catálogo público",
           "estado": "hecho",
-          "descripcion": "GET /api/projects/catalog público. Filtros por estado y búsqueda por título/descripción. Paginación. Destacados primero",
+          "descripcion": "GET /api/projects/catalog público. Filtros por estado y búsqueda. Paginación. Destacados primero",
           "dependencias": ["CRUD proyectos"],
-          "entregables": ["findByFilters() con SQL dinámico", "Permitido sin JWT en SecurityConfig"],
+          "entregables": ["findByFilters() con SQL dinámico", "SecurityConfig permite público"],
           "prioridad": "Media"
         },
         {
-          "nombre": "Crear sub-token on-chain",
+          "nombre": "Boost / Destacar proyecto",
           "estado": "hecho",
-          "descripcion": "Al publicar proyecto (PREP→FINAN), deployar ProjectToken en Sepolia via InvestmentSwap. Fallback a TokenFactory. Guardar contract_address en tabla subtokens",
-          "dependencias": ["Máquina de estados", "InvestmentSwap v3 deployado"],
-          "entregables": ["crearSubtokenParaProyecto()", "Fallback InvestmentSwap → TokenFactory", "INSERT en subtokens"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Boost / Destacar",
-          "estado": "hecho",
-          "descripcion": "Permitir al creador pagar por destacar su proyecto en el catálogo (aparece primero en resultados)",
-          "dependencias": ["Catálogo público", "WalletService"],
-          "entregables": ["BoostService.boostProject()", "UPDATE es_destacado en projects"],
+          "descripcion": "Pagando 100 $IDEA el creador destaca su proyecto por 7 días. Aparece primero en catálogo",
+          "dependencias": ["Catálogo público", "Billetera: saldo $IDEA"],
+          "entregables": ["BoostService.boostProject()", "UPDATE es_destacado"],
           "prioridad": "Baja"
         },
         {
           "nombre": "Evaluar vencimiento",
           "estado": "hecho",
-          "descripcion": "Endpoint manual (ADMIN) y scheduler automático que revisa proyectos vencidos y los cierra",
+          "descripcion": "Endpoint manual y scheduler que revisa proyectos vencidos y los cierra",
           "dependencias": ["Máquina de estados"],
           "entregables": ["evaluateAndUpdateStates()", "POST /api/projects/evaluate-states"],
+          "prioridad": "Alta"
+        }
+      ]
+    },
+    {
+      "nombre": "Inversión",
+      "etapas": [
+        {
+          "nombre": "Validar persona",
+          "estado": "hecho",
+          "descripcion": "Verificar que el usuario existe, está autenticado (JWT) y tiene permiso 'investment:create'",
+          "dependencias": ["Auth: Login + roles"],
+          "entregables": ["InvestmentController con @PreAuthorize", "AuthServiceClient"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Registrar inversión en DB",
+          "estado": "hecho",
+          "descripcion": "Guardar inversión en tabla investments con monto, proyecto_id, usuario_id, estado, created_at",
+          "dependencias": ["Validar persona", "Migraciones Flyway V1..V17"],
+          "entregables": ["JdbcInvestmentRepository", "InvestmentService.createInvestment()"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Actualizar saldo proyecto",
+          "estado": "hecho",
+          "descripcion": "Sumar monto invertido a monto_recaudado. Validar que no supere monto_requerido",
+          "dependencias": ["Registrar inversión en DB"],
+          "entregables": ["UPDATE projects SET monto_recaudado = monto_recaudado + ?"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Swap atómico on-chain",
+          "estado": "hecho",
+          "descripcion": "InvestmentSwap.invest() ejecuta transferFrom($IDEA) + mint(sub-tokens) en una tx",
+          "dependencias": ["InvestmentSwap v3 en Sepolia", "Tokenización: token del proyecto creado"],
+          "entregables": ["InvestmentSwap.sol invest()", "InvestmentSwapService.java (Web3j)"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Refund / Devolución",
+          "estado": "hecho",
+          "descripcion": "Proyecto vence sin meta: quemar sub-tokens, inversión a REEMBOLSADA, proyecto a RECHAZADO",
+          "dependencias": ["Swap atómico on-chain"],
+          "entregables": ["InvestmentSwap.refund()", "InvestmentScheduler @Scheduled 6AM"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Historial de inversiones",
+          "estado": "hecho",
+          "descripcion": "GET /api/investments/history con paginación, join con projects",
+          "dependencias": ["Registrar inversión en DB"],
+          "entregables": ["InvestmentController.getHistory()", "N+1 eliminado con buildTituloMap()"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Scheduler cierre automático",
+          "estado": "hecho",
+          "descripcion": "Evaluar proyectos vencidos cada 6 AM. Refund si no alcanzaron meta, FINALIZADO si sí",
+          "dependencias": ["Refund / Devolución"],
+          "entregables": ["InvestmentScheduler.processExpiredProjects()"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Simulación sin blockchain",
           "estado": "pendiente",
-          "descripcion": "Poder crear proyectos y probar flujos sin deployar contratos reales en Sepolia",
-          "dependencias": ["Crear sub-token on-chain"],
-          "entregables": ["Profile 'simulacion'", "ContractAddress ficticia"],
+          "descripcion": "Probar flujo completo sin conectarse a Sepolia. Mock de InvestmentSwapService",
+          "dependencias": ["Swap atómico on-chain", "Refund / Devolución"],
+          "entregables": ["MockInvestmentSwapService", "Profile 'simulacion'"],
           "prioridad": "Media"
         }
       ]
     },
     {
-      "nombre": "Blockchain",
+      "nombre": "Tokenización",
+      "etapas": [
+        {
+          "nombre": "Servicio lectura Smart Contract",
+          "estado": "hecho",
+          "descripcion": "Conectarse al nodo blockchain para consultar token del proyecto: balance, distribución, owner",
+          "dependencias": ["Blockchain: contratos deployados en Sepolia"],
+          "entregables": ["BlockchainService", "SmartContractService.getContractInfo()", "TOK-07"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Crear token ERC-20 al activar financiamiento",
+          "estado": "hecho",
+          "descripcion": "Al pasar a FINANCIAMIENTO, deployar ProjectToken via InvestmentSwap con fallback TokenFactory. Persistir en subtokens",
+          "dependencias": ["Servicio lectura SC", "Proyecto: máquina de estados"],
+          "entregables": ["TokenizationService.crearTokenParaProyecto()", "InvestmentSwap.crearTokenProyecto()", "TOK-01, 02, 03"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Endpoint consulta de tokens",
+          "estado": "hecho",
+          "descripcion": "GET /api/tokens/{proyectoId} y GET /api/tokens (paginado) con metadatos del token",
+          "dependencias": ["Crear token ERC-20"],
+          "entregables": ["TokenizationController", "TokenizationRepository", "TOK-04, 05"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Frontend: visualización de token",
+          "estado": "pendiente",
+          "descripcion": "Sección en detalle del proyecto con dirección del contrato, precio actual, cupo restante",
+          "dependencias": ["Endpoint consulta de tokens"],
+          "entregables": ["Componente TokenInfo", "Link a Etherscan", "TOK-06"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Marketplace",
+      "etapas": [
+        {
+          "nombre": "BDD: Tablas de libro de órdenes",
+          "estado": "pendiente",
+          "descripcion": "Crear tabla order_book con: id, vendedor_id, subtoken_id, cantidad, precio_unitario, estado, created_at",
+          "dependencias": ["Tokenización: tokens creados", "Auth: usuarios autenticados"],
+          "entregables": ["Migration Flyway con CREATE TABLE", "Índices por proyecto y estado", "MKT-00"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Smart Contract de Marketplace",
+          "estado": "pendiente",
+          "descripcion": "Contrato para ejecución descentralizada de compra/venta con fee automático para la plataforma",
+          "dependencias": ["Blockchain: InvestmentSwap", "Tokenización: ProjectToken"],
+          "entregables": ["Marketplace.sol", "Tests + Slither", "MKT-01"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Endpoint de cotización",
+          "estado": "pendiente",
+          "descripcion": "Calcular precio dinámico según oferta/demanda y rendimiento del proyecto",
+          "dependencias": ["BDD: Tablas de libro de órdenes", "Tokenización: DynamicPricingService"],
+          "entregables": ["GET /api/marketplace/quote", "Fórmula de pricing dinámico", "MKT-02"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Endpoint de ejecución compra/venta",
+          "estado": "pendiente",
+          "descripcion": "Validar saldos, ejecutar contra SC, actualizar order_book y portfolio",
+          "dependencias": ["Smart Contract de Marketplace", "Endpoint de cotización"],
+          "entregables": ["POST /api/marketplace/orders", "POST /api/marketplace/execute", "MKT-03"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Frontend de Marketplace",
+          "estado": "pendiente",
+          "descripcion": "Interfaz para ver órdenes activas, publicar ventas y comprar subtokens",
+          "dependencias": ["Endpoint de ejecución compra/venta"],
+          "entregables": ["MarketplacePage", "OrderBook component", "MKT-04"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Dashboard y Estadísticas",
+      "etapas": [
+        {
+          "nombre": "Endpoint estadísticas generales",
+          "estado": "hecho",
+          "descripcion": "GET /api/dashboard/stats público: total usuarios, inversores, proyectos, distribución por estado, monto total",
+          "dependencias": ["Proyecto: CRUD", "Auth: usuarios registrados"],
+          "entregables": ["DashboardController", "DashboardService", "DashboardRepository", "DASH-01"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Ranking de proyectos",
+          "estado": "hecho",
+          "descripcion": "Listado de proyectos ordenados por monto recaudado, cantidad de inversores y actividad (Fx VALOR2)",
+          "dependencias": ["Endpoint estadísticas generales"],
+          "entregables": ["Ranking en DashboardService", "DASH-02"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Frontend: componente de estadísticas",
+          "estado": "pendiente",
+          "descripcion": "Tarjetas de métricas y gráficos de distribución por estado",
+          "dependencias": ["Endpoint estadísticas generales"],
+          "entregables": ["StatsCards component", "Gráficos Chart.js o similar", "DASH-03"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Tablero visual de progreso de módulos",
+          "estado": "hecho",
+          "descripcion": "GET /api/modules/status público + página /estado.html con colores por etapa",
+          "dependencias": ["Ninguna (archivo estático + JSON)"],
+          "entregables": ["ModulosController", "estado.html", "modulos-estado.json", "DASH-04, 05, 06"],
+          "prioridad": "Alta"
+        }
+      ]
+    },
+    {
+      "nombre": "Beneficios y Dividendos",
+      "etapas": [
+        {
+          "nombre": "BDD: Tablas de dividendos",
+          "estado": "hecho",
+          "descripcion": "Tablas dividendos y reclamos_dividendos con FK a projects y users",
+          "dependencias": ["Proyecto: CRUD", "Auth: usuarios"],
+          "entregables": ["Migration V10", "BEN-DIST-00"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Cálculo de rendimientos",
+          "estado": "hecho",
+          "descripcion": "DividendService.crearReparto() calcula monto por subtoken según participación del inversor",
+          "dependencias": ["BDD: Tablas de dividendos", "Inversión: registros de inversión"],
+          "entregables": ["DividendService.crearReparto()", "BEN-DIST-02"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Endpoint historial de ganancias",
+          "estado": "hecho",
+          "descripcion": "GET /api/dividendos/mis-reclamos y GET /api/dividendos/proyecto/{id}",
+          "dependencias": ["Cálculo de rendimientos"],
+          "entregables": ["DividendController", "BEN-DIST-04"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Reclamo de dividendos",
+          "estado": "hecho",
+          "descripcion": "POST /api/dividendos/{id}/reclamar: reclama dividendos y acredita en saldo_usdt del usuario",
+          "dependencias": ["Endpoint historial de ganancias"],
+          "entregables": ["DividendService.reclamarDividendos()", "UPDATE saldo_usdt"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Smart Contract de distribución mensual",
+          "estado": "pendiente",
+          "descripcion": "SC que distribuye dividendos en USDT automáticamente cada mes según holders de subtokens",
+          "dependencias": ["Blockchain: USDC/USDT en Sepolia", "Tokenización: subtokens on-chain"],
+          "entregables": ["DividendDistribution.sol", "BEN-DIST-01"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Cross-Rewards (lealtad)",
+          "estado": "pendiente",
+          "descripcion": "Descuentos automáticos al invertir en nuevo proyecto de mismo creador (Fx VALOR3)",
+          "dependencias": ["Cálculo de rendimientos"],
+          "entregables": ["CrossRewardService", "BEN-DIST-06"],
+          "prioridad": "Baja"
+        }
+      ]
+    },
+    {
+      "nombre": "Billetera Virtual",
+      "etapas": [
+        {
+          "nombre": "Modelo de saldos multi-activo",
+          "estado": "hecho",
+          "descripcion": "Campos saldo_idea y saldo_usdt en tabla users. Portafolio en portfolio_activos",
+          "dependencias": ["Auth: tabla users"],
+          "entregables": ["Migration V5", "BIL-VIRT-03"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Endpoint consolidación de balance",
+          "estado": "hecho",
+          "descripcion": "GET /api/wallet/summary: saldo $IDEA, saldo USDT, portafolio de subtokens con precio actual",
+          "dependencias": ["Modelo de saldos multi-activo", "Tokenización: subtokens con precio"],
+          "entregables": ["WalletController", "WalletService.getSummary()", "BIL-VIRT-04"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Frontend: Dashboard de billetera",
+          "estado": "pendiente",
+          "descripcion": "Interfaz con saldos, portafolio y balance total",
+          "dependencias": ["Endpoint consolidación de balance"],
+          "entregables": ["WalletPage", "BalanceCards", "BIL-VIRT-05"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Historial filtrable de operaciones",
+          "estado": "pendiente",
+          "descripcion": "Endpoint con paginación y filtros por tipo, fecha, proyecto. Tabla frontend interactiva",
+          "dependencias": ["Endpoint consolidación de balance"],
+          "entregables": ["GET /api/wallet/history", "TransactionTable component", "BIL-VIRT-06, 07, 08"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Recarga / Pasarela de pago",
+          "estado": "pendiente",
+          "descripcion": "Comprar $IDEA con dinero real mediante pasarela integrada. Webhooks para acreditar saldo",
+          "dependencias": ["Endpoint consolidación de balance", "Servicio externo: pasarela de pago"],
+          "entregables": ["TopUpController", "Webhook handler", "Integración MercadoPago/Stripe", "BIL-VIRT-00, 01, 02"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Notificaciones",
+      "etapas": [
+        {
+          "nombre": "BDD: Tabla de notificaciones",
+          "estado": "pendiente",
+          "descripcion": "Tabla notificaciones con: id, usuario_id, tipo, mensaje, leida, created_at",
+          "dependencias": ["Auth: tabla users"],
+          "entregables": ["Migration Flyway", "NOT-00"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Motor de alertas y eventos",
+          "estado": "pendiente",
+          "descripcion": "Servicio que escucha eventos del sistema (inversión, dividendos, boost) y genera notificaciones",
+          "dependencias": ["BDD: Tabla de notificaciones"],
+          "entregables": ["NotificationService", "Event listeners", "NOT-02"],
+          "prioridad": "Alta"
+        },
+        {
+          "nombre": "Email / SMTP",
+          "estado": "pendiente",
+          "descripcion": "Integración con servidor SMTP para enviar correos de confirmación y alertas",
+          "dependencias": ["Motor de alertas y eventos"],
+          "entregables": ["EmailService", "Plantillas Thymeleaf", "NOT-01"],
+          "prioridad": "Media"
+        },
+        {
+          "nombre": "Frontend: componente de notificaciones",
+          "estado": "pendiente",
+          "descripcion": "Campana con contador de no leídas, dropdown con lista, marcar como leída",
+          "dependencias": ["Motor de alertas y eventos"],
+          "entregables": ["NotificationBell component", "NotificationsDropdown", "NOT-03"],
+          "prioridad": "Media"
+        }
+      ]
+    },
+    {
+      "nombre": "Blockchain (Infraestructura)",
       "etapas": [
         {
           "nombre": "InvestmentSwap v3",
           "estado": "hecho",
-          "descripcion": "Contrato principal con Ownable + ReentrancyGuard. Funciones: crearTokenProyecto, invest (swap atómico), refund",
-          "dependencias": ["OpenZeppelin (Ownable, ReentrancyGuard)"],
-          "entregables": ["InvestmentSwap.sol", "Deploy a Sepolia en 0x4c53728..."],
+          "descripcion": "Contrato principal con Ownable + ReentrancyGuard. crearTokenProyecto, invest, refund",
+          "dependencias": ["OpenZeppelin"],
+          "entregables": ["InvestmentSwap.sol", "Deploy en 0x4c53728..."],
           "prioridad": "Alta"
         },
         {
-          "nombre": "ProjectToken",
+          "nombre": "ProjectToken (ERC-20)",
           "estado": "hecho",
-          "descripcion": "ERC-20 con quema del 0.1% en transfers. Override de _update(). No quema en mint/burn",
+          "descripcion": "ERC-20 con quema 0.1% en transfers. Override de _update()",
           "dependencias": ["OpenZeppelin ERC-20"],
-          "entregables": ["ProjectToken.sol", "Tests de threshold (999 vs 1000)"],
+          "entregables": ["ProjectToken.sol", "Tests threshold"],
           "prioridad": "Alta"
         },
         {
-          "nombre": "TokenFactory (legacy)",
+          "nombre": "TokenFactory (legacy + fallback)",
           "estado": "hecho",
-          "descripcion": "Contrato anterior que creaba tokens. Bug conocido: supplyInicial > 0 revierte por ownership. Usado como fallback",
+          "descripcion": "Contrato anterior usado como fallback si InvestmentSwap no está disponible",
           "dependencias": ["ProjectToken"],
-          "entregables": ["TokenFactory.sol", "Tests documentando el bug"],
+          "entregables": ["TokenFactory.sol", "Bug documentado: supplyInicial > 0 revierte"],
           "prioridad": "Media"
         },
         {
           "nombre": "PaymentGateway",
           "estado": "hecho",
-          "descripcion": "Gateway de pagos en USDC. Funciones: pay, setTreasury, withdraw. Inmutable: usdc corregido a public immutable",
+          "descripcion": "Gateway de pagos en USDC con pay, setTreasury, withdraw",
           "dependencias": ["OpenZeppelin ERC-20"],
-          "entregables": ["PaymentGateway.sol", "Tests 36 + fuzz"],
+          "entregables": ["PaymentGateway.sol", "36 tests + fuzz"],
           "prioridad": "Media"
         },
         {
-          "nombre": "Tests unitarios + fuzz",
+          "nombre": "Tests Solidity + fuzz",
           "estado": "hecho",
-          "descripcion": "171 tests Solidity (153 unit + 18 fuzz × 256 runs = 4.608 casos). Cobertura 93.42% lines",
+          "descripcion": "171 tests (153 unit + 18 fuzz × 256 runs = 4.608 casos). Cobertura 93.42%",
           "dependencias": ["Foundry (forge test)"],
-          "entregables": ["5 archivos .t.sol", "FuzzEdgeTests.sol para valores extremos"],
+          "entregables": ["5 archivos .t.sol", "FuzzEdgeTests.sol"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Seguridad (Slither)",
           "estado": "hecho",
-          "descripcion": "Análisis estático con Slither de Trail of Bits. 0 High, 0 Medium. Se corrigió: usdc a immutable, require address(0) en TokenFactory",
+          "descripcion": "Análisis estático. 0 High, 0 Medium. usdc a immutable, require address(0)",
           "dependencias": ["Todos los contratos compilados"],
           "entregables": ["Reporte Slither", "Contratos corregidos"],
           "prioridad": "Alta"
@@ -200,128 +459,62 @@
         {
           "nombre": "Deploy a Sepolia",
           "estado": "hecho",
-          "descripcion": "Deployar todos los contratos a Sepolia Testnet. Verificar con cast. Configurar direcciones en .env y application.properties",
-          "dependencias": ["InvestmentSwap v3", "Foundry (forge create)"],
-          "entregables": ["InvestmentSwap en 0x4c53728...", "IDEIA Token en 0x9f2c766...", "Script DeployInvestmentSwap.java"],
+          "descripcion": "Deployar contratos a Sepolia Testnet. Verificar con cast. Configurar .env",
+          "dependencias": ["InvestmentSwap v3", "Foundry"],
+          "entregables": ["InvestmentSwap en 0x4c53728...", "IDEA Token, USDC, Treasury", "DeployInvestmentSwap.java"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Simulación local (Anvil)",
           "estado": "pendiente",
-          "descripcion": "Usar Anvil (Foundry) para levantar una red local y deployar contratos sin necesidad de Sepolia. Ideal para desarrollo rápido",
+          "descripcion": "Usar Anvil para red local sin Sepolia. Ideal para desarrollo rápido",
           "dependencias": ["Foundry instalado"],
-          "entregables": ["Script de deploy local con Anvil", "Profile 'local' en application.properties"],
+          "entregables": ["Script deploy local", "Profile 'local'"],
           "prioridad": "Media"
         }
       ]
     },
     {
-      "nombre": "Auth (Ulises)",
-      "etapas": [
-        {
-          "nombre": "Login email + JWT",
-          "estado": "hecho",
-          "descripcion": "Endpoint POST /auth/login con email/password. Devuelve accessToken + refreshToken. Password hasheada con BCrypt",
-          "dependencias": ["Tabla usuarios en DB"],
-          "entregables": ["AuthController", "JwtProvider", "BCrypt"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Google OAuth2",
-          "estado": "hecho",
-          "descripcion": "Login con Google. Redirección a /oauth2/authorization/google. Callback registra o loguea usuario automáticamente",
-          "dependencias": ["Login email + JWT", "Client ID y Secret de Google Cloud"],
-          "entregables": ["OAuth2 config en SecurityConfig", "Callback handler"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Roles y permisos",
-          "estado": "hecho",
-          "descripcion": "Roles: USER, ADMIN, PROJECT_CREATOR. Permisos: project:create, investment:create, etc. Control con @PreAuthorize",
-          "dependencias": ["Login email + JWT"],
-          "entregables": ["RoleService", "PermissionService", "Endpoint CRUD roles/permisos"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Refresh token",
-          "estado": "hecho",
-          "descripcion": "Endpoint POST /auth/refresh que recibe refreshToken y devuelve nuevo accessToken. Refresh token dura 7 días",
-          "dependencias": ["Login email + JWT"],
-          "entregables": ["Refresh token rotation", "Almacenamiento en DB o HttpOnly cookie"],
-          "prioridad": "Alta"
-        }
-      ]
-    },
-    {
-      "nombre": "Wallet / $IDEA",
-      "etapas": [
-        {
-          "nombre": "Balance on-chain",
-          "estado": "hecho",
-          "descripcion": "Consultar balance de $IDEA de un usuario en Sepolia vía eth_call. No gasta gas",
-          "dependencias": ["IDEA Token deployado en Sepolia", "Web3j"],
-          "entregables": ["WalletService.getBalance()", "Endpoint GET /api/wallet/balance"],
-          "prioridad": "Alta"
-        },
-        {
-          "nombre": "Transferencia entre usuarios",
-          "estado": "pendiente",
-          "descripcion": "Permitir que un usuario envie $IDEA a otro. Transferencia ERC-20 estándar firmada por el backend",
-          "dependencias": ["Balance on-chain"],
-          "entregables": ["WalletService.transfer()", "POST /api/wallet/transfer"],
-          "prioridad": "Baja"
-        },
-        {
-          "nombre": "Faucet automático",
-          "estado": "pendiente",
-          "descripcion": "Al registrar un usuario nuevo, mintear automaticamente una cantidad fija de $IDEA a su wallet en Sepolia",
-          "dependencias": ["Balance on-chain", "Registro de usuario (Auth)"],
-          "entregables": ["Event listener de registro", "IDEA.mint() desde treasury"],
-          "prioridad": "Media"
-        }
-      ]
-    },
-    {
-      "nombre": "Frontend",
+      "nombre": "Frontend (Tobías)",
       "etapas": [
         {
           "nombre": "Conexión MetaMask",
           "estado": "hecho",
-          "descripcion": "Conectar wallet con RainbowKit + Wagmi. Mostrar address y balance de ETH en la UI",
+          "descripcion": "RainbowKit + Wagmi. Conectar wallet, mostrar address y balance",
           "dependencias": ["RainbowKit", "Wagmi"],
-          "entregables": ["Layout con ConnectButton", "Provider setup"],
+          "entregables": ["Layout con ConnectButton"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Formulario de inversión",
           "estado": "pendiente",
-          "descripcion": "Modal o página con selector de proyecto, monto de $IDEA, preview del precio dinámico, confirmación",
-          "dependencias": ["Conexión MetaMask", "Endpoint POST /api/investments", "Endpoint GET /api/projects/catalog"],
-          "entregables": ["InvestmentForm component", "Validación frontend", "Loader mientras confirma tx"],
+          "descripcion": "Modal con selector de proyecto, monto, preview de precio dinámico, confirmación",
+          "dependencias": ["Conexión MetaMask", "Inversión: endpoint POST /api/investments", "Proyecto: catálogo"],
+          "entregables": ["InvestmentForm component", "INV-06"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Historial de inversiones",
           "estado": "pendiente",
-          "descripcion": "Tabla paginada con todas las inversiones del usuario, link a Etherscan en cada txHash, filtros por estado",
-          "dependencias": ["Formulario de inversión", "Endpoint GET /api/investments/history"],
-          "entregables": ["InvestmentHistory component", "Badge de estado con color", "Link externo a Etherscan"],
+          "descripcion": "Tabla paginada con todas las inversiones, link a Etherscan, filtros por estado",
+          "dependencias": ["Formulario de inversión", "Inversión: GET /api/investments/history"],
+          "entregables": ["InvestmentHistory component", "INV-08"],
           "prioridad": "Media"
         },
         {
-          "nombre": "Link a Etherscan",
+          "nombre": "Pantalla de reembolsos",
           "estado": "pendiente",
-          "descripcion": "Mostrar txHash como hipervínculo a sepolia.etherscan.io/tx/{txHash} en detalle de inversión",
-          "dependencias": ["Historial de inversiones"],
-          "entregables": ["EtherscanLink component", "Tooltip con copia de txHash"],
+          "descripcion": "Indicadores visuales de proyecto fallido y botón de reembolso",
+          "dependencias": ["Historial de inversiones", "Inversión: refund"],
+          "entregables": ["RefundIndicator component", "INV-11"],
           "prioridad": "Media"
         },
         {
           "nombre": "Dashboard estado módulos",
           "estado": "hecho",
-          "descripcion": "Página /estado.html que muestra el tablero visual con todos los módulos, etapas y colores. Endpoint GET /api/modules/status",
-          "dependencias": ["Ninguna (archivo estático + JSON)"],
-          "entregables": ["estado.html", "ModulosController", "modulos-estado.json"],
+          "descripcion": "/estado.html con tablero visual de módulos, etapas y colores",
+          "dependencias": [],
+          "entregables": ["estado.html", "ModulosController"],
           "prioridad": "Alta"
         }
       ]
