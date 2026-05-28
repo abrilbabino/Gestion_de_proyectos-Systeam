@@ -17,17 +17,17 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.systeam.security.TokenValidationFilter;
+import com.systeam.security.GatewayHeaderFilter;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final TokenValidationFilter tokenValidationFilter;
+    private final GatewayHeaderFilter gatewayHeaderFilter;
 
-    public SecurityConfig(TokenValidationFilter tokenValidationFilter) {
-        this.tokenValidationFilter = tokenValidationFilter;
+    public SecurityConfig(GatewayHeaderFilter gatewayHeaderFilter) {
+        this.gatewayHeaderFilter = gatewayHeaderFilter;
     }
 
     @Bean
@@ -72,7 +72,7 @@ public class SecurityConfig {
                 // Todo lo demás requiere estar autenticado (+ @PreAuthorize en el controller)
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(tokenValidationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
 }

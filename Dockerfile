@@ -22,7 +22,7 @@ RUN mvn install:install-file \
     -Dpackaging=jar \
     -q
 
-RUN chmod +x mvnw && ./mvnw -q -DskipTests package
+RUN chmod +x mvnw && ./mvnw -q -Dmaven.test.skip=true package
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
