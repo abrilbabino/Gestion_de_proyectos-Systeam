@@ -193,42 +193,42 @@
       "etapas": [
         {
           "nombre": "BDD: Tablas de libro de órdenes",
-          "estado": "pendiente",
-          "descripcion": "Crear tabla order_book con: id, vendedor_id, subtoken_id, cantidad, precio_unitario, estado, created_at",
+          "estado": "hecho",
+          "descripcion": "Tabla order_book con: id, seller_id, subtoken_id, cantidad, cantidad_inicial, precio_unitario, estado, tx_hash. Flyway V19. MKT-03",
           "dependencias": ["Tokenización: tokens creados", "Auth: usuarios autenticados"],
-          "entregables": ["Migration Flyway con CREATE TABLE", "Índices por proyecto y estado", "MKT-00"],
+          "entregables": ["V19__create_marketplace_tables.sql", "Índices por estado, seller, subtoken"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Smart Contract de Marketplace",
-          "estado": "pendiente",
-          "descripcion": "Contrato para ejecución descentralizada de compra/venta con fee automático para la plataforma",
+          "estado": "hecho",
+          "descripcion": "IdeaMarketplace.sol con listTokens, buyTokens, cancelListing, collectFees, EIP-712, paginación. MKT-04",
           "dependencias": ["Blockchain: InvestmentSwap", "Tokenización: ProjectToken"],
-          "entregables": ["Marketplace.sol", "Tests + Slither", "MKT-01"],
+          "entregables": ["IdeaMarketplace.sol", "IdeaMarketplaceService.java (Web3j)"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Endpoint de cotización",
           "estado": "hecho",
-          "descripcion": "Calcular precio dinámico según oferta/demanda y rendimiento del proyecto",
-          "dependencias": ["BDD: Tablas de libro de órdenes", "Tokenización: DynamicPricingService"],
-          "entregables": ["GET /api/marketplace/quote", "Fórmula de pricing dinámico + factor rendimiento", "MKT-02"],
+          "descripcion": "GET /api/marketplace/quote calcula precio dinámico según oferta/demanda y rendimiento del proyecto",
+          "dependencias": ["Tokenización: DynamicPricingService"],
+          "entregables": ["MarketplaceController.getQuote()", "DynamicPricingService"],
           "prioridad": "Media"
         },
         {
-          "nombre": "Endpoint de ejecución compra/venta",
-          "estado": "pendiente",
-          "descripcion": "Validar saldos, ejecutar contra SC, actualizar order_book y portfolio",
-          "dependencias": ["Smart Contract de Marketplace", "Endpoint de cotización"],
-          "entregables": ["POST /api/marketplace/orders", "POST /api/marketplace/execute", "MKT-03"],
+          "nombre": "API REST compra/venta/cancelación",
+          "estado": "hecho",
+          "descripcion": "MarketplaceService + MarketplaceController. POST /listings, POST /listings/{id}/buy, POST /listings/{id}/cancel, GET /listings, GET /listings/{id}, GET /listings/by-subtoken/{id}. MKT-05",
+          "dependencias": ["BDD: Tablas de libro de órdenes", "IdeaMarketplaceService"],
+          "entregables": ["MarketplaceController.java", "MarketplaceService.java", "CreateListingRequest DTO", "ListingResponse DTO"],
           "prioridad": "Alta"
         },
         {
           "nombre": "Frontend de Marketplace",
           "estado": "pendiente",
-          "descripcion": "Interfaz para ver órdenes activas, publicar ventas y comprar subtokens",
-          "dependencias": ["Endpoint de ejecución compra/venta"],
-          "entregables": ["MarketplacePage", "OrderBook component", "MKT-04"],
+          "descripcion": "Interfaz para ver órdenes activas, publicar ventas y comprar subtokens. MKT-06",
+          "dependencias": ["API REST compra/venta/cancelación"],
+          "entregables": ["MarketplacePage", "OrderBook component"],
           "prioridad": "Media"
         }
       ]
