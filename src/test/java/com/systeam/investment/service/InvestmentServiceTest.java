@@ -117,7 +117,7 @@ class InvestmentServiceTest {
             )));
 
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
-        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(), anyLong())).thenReturn(new BigDecimal("10.00"));
 
         ValidateInvestmentResponse response = investmentService.validateInvestment(request);
 
@@ -192,7 +192,7 @@ class InvestmentServiceTest {
         Map<String, Object> subtokenSinCupo = new java.util.HashMap<>(SUBTOKEN_EN_FINANCIAMIENTO);
         subtokenSinCupo.put("cupo_restante", 0);
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(subtokenSinCupo);
-        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
         ValidateInvestmentResponse response = investmentService.validateInvestment(request);
 
@@ -233,7 +233,7 @@ class InvestmentServiceTest {
             )));
 
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
-        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
         when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
             .thenReturn(new BigDecimal("5000.00"));
@@ -339,7 +339,7 @@ class InvestmentServiceTest {
         Map<String, Object> subtokenPocoCupo = new java.util.HashMap<>(SUBTOKEN_EN_FINANCIAMIENTO);
         subtokenPocoCupo.put("cupo_restante", 10);
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(subtokenPocoCupo);
-        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(), anyLong())).thenReturn(new BigDecimal("10.00"));
 
         assertThatThrownBy(() -> investmentService.createInvestment(request, 2L))
                 .isInstanceOf(ConflictException.class)
@@ -364,7 +364,7 @@ class InvestmentServiceTest {
             )));
 
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
-        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any())).thenReturn(new BigDecimal("10.00"));
+        when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
         when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
             .thenReturn(new BigDecimal("100.00"));
