@@ -6521,3 +6521,182 @@ El frontend arranca en http://localhost:5173 y debe apuntar al Gateway (http://l
 | Frontend | React, Wagmi, Vite |
 | Autenticacion | JWT, Auth Service|
 | Contenedores | Docker Hub (ulisescasal/gestion-proyectos, ulisescasal/systeam-backend) |
+
+## 8. Guia completa: Deployar los 8 contratos en Sepolia
+
+### 1. Entender las dependencias entre contratos
+
+| Contrato | Constructor | Depende de |
+|---|---|---|
+| IdeaToken.sol | `()` vacio | Nada |
+| SubToken.sol | `()` vacio (upgradeable, implementation) | Nada |
+| IdeafyFactory.sol | `()` vacio + necesita llamar `setSubTokenImplementation()` post-deploy | Nada |
+| OfferingContract.sol | `(address _idea, address _factory)` | IdeaToken, IdeafyFactory |
+| IdeaMarketplace.sol | `(address _idea)` | IdeaToken |
+| IdeaGovernance.sol | `(address _idea)` | IdeaToken |
+| IdeaSwap.sol | `(address _idea, address _usdc)` | IdeaToken, USDC |
+| DividendDistributor.sol | `(address _idea, address _factory)` | IdeaToken, IdeafyFactory |
+
+Orden de deploy: primero los que no dependen de nadie, despues los que necesitan direcciones de los anteriores.
+
+### 2. Verificar que Foundry esta instalado
+
+```powershell
+$env:PATH = "C:\Users\Usuario\.foundry\bin;$env:PATH"
+forge --version
+# Debe mostrar algo como: forge Version: 1.7.1
+```
+
+### 3. Compilar los contratos
+
+```powershell
+cd blockchain
+forge build
+```
+
+Si hay errores de compilacion, arreglarlos antes de seguir.
+
+### 4. Escribir el script de deploy
+
+Crear `blockchain/script/DeployAll.s.sol`:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Script.sol";
+import "../contracts/IdeaToken.sol";
+import "../contracts/SubToken.sol";
+import "../contracts/IdeafyFactory.sol";
+import "../contracts/OfferingContract.sol";
+import "../contracts/DividendDistributor.sol";
+import "../contracts/IdeaMarketplace.sol";
+import "../contracts/IdeaGovernance.sol";
+import "../contracts/IdeaSwap.sol";
+
+contract DeployAll is Script {
+    function run() external {
+        uint256 deployerPK = vm.envUint("BLOCKCHAIN_PRIVATE_KEY");
+        address backend = vm.addr(deployerPK);
+
+        vm.startBroadcast(deployerPK);
+
+        // 1. IdeaToken
+        IdeaToken ideaToken = new IdeaToken();
+
+        // 2. SubToken (implementation)
+        SubToken subTokenImpl = new SubToken();
+
+        // 3. IdeafyFactory
+        IdeafyFactory factory = new IdeafyFactory();
+        factory.setSubTokenImplementation(address(subTokenImpl));
+        factory.grantRole(factory.CREATOR_ROLE(), backend);
+
+        // 4. OfferingContract
+        OfferingContract offering = new OfferingContract(address(ideaToken), address(factory));
+        offering.grantRole(offering.ADMIN_ROLE(), backend);
+
+        // 5. DividendDistributor
+        DividendDistributor distributor = new DividendDistributor(address(ideaToken), address(factory));
+
+        // 6. IdeaMarketplace
+        IdeaMarketplace marketplace = new IdeaMarketplace(address(ideaToken));
+
+        // 7. IdeaGovernance
+        IdeaGovernance governance = new IdeaGovernance(address(ideaToken));
+
+        // 8. IdeaSwap
+        address usdc = vm.envAddress("BLOCKCHAIN_USDC");
+        IdeaSwap swap = new IdeaSwap(address(ideaToken), usdc);
+
+        vm.stopBroadcast();
+
+        // Logs para copiar al .env
+        console.log("BLOCKCHAIN_IDEA_TOKEN=", address(ideaToken));
+        console.log("BLOCKCHAIN_SUB_TOKEN_IMPLEMENTATION=", address(subTokenImpl));
+        console.log("BLOCKCHAIN_IDEAFY_FACTORY=", address(factory));
+        console.log("BLOCKCHAIN_OFFERING_CONTRACT=", address(offering));
+        console.log("BLOCKCHAIN_DIVIDEND_DISTRIBUTOR=", address(distributor));
+        console.log("BLOCKCHAIN_IDEA_MARKETPLACE=", address(marketplace));
+        console.log("BLOCKCHAIN_IDEA_GOVERNANCE=", address(governance));
+        console.log("BLOCKCHAIN_IDEA_SWAP=", address(swap));
+    }
+}
+```
+
+### 5. Verificar que compila
+
+```powershell
+forge build
+```
+
+### 6. Verificar que la wallet tiene fondos
+
+```powershell
+# Obtener la direccion del deployer
+cast wallet address --private-key "0xb7ddf518a66ac1b209065717fd07f08aeb78ed3f8235e88bc17935172d72be3e"
+# Resultado: 0x7eEA865D2f47B5cC0fF4c8967C1cCf667fEBE50A
+
+# Verificar saldo en Sepolia
+cast balance --rpc-url "https://ethereum-sepolia-rpc.publicnode.com" 0x7eEA865D2f47B5cC0fF4c8967C1cCf667fEBE50A
+```
+
+Si no tiene ETH, pedir en un faucet de Sepolia.
+
+### 7. Calcular si alcanza
+
+```powershell
+forge script script/DeployAll.s.sol:DeployAll `
+  --rpc-url "https://ethereum-sepolia-rpc.publicnode.com" `
+  --private-key "0xb7ddf518a66ac1b209065717fd07f08aeb78ed3f8235e88bc17935172d72be3e" `
+  --slow
+```
+
+El output muestra el estimado de gas. Debe alcanzar ~0.03 ETH para los 8 contratos.
+
+### 8. Deployar
+
+```powershell
+$env:BLOCKCHAIN_USDC="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+$env:BLOCKCHAIN_PRIVATE_KEY="0xb7ddf518a66ac1b209065717fd07f08aeb78ed3f8235e88bc17935172d72be3e"
+
+forge script script/DeployAll.s.sol:DeployAll `
+  --rpc-url "https://ethereum-sepolia-rpc.publicnode.com" `
+  --private-key "0xb7ddf518a66ac1b209065717fd07f08aeb78ed3f8235e88bc17935172d72be3e" `
+  --broadcast --slow
+```
+
+Flags importantes:
+- `--broadcast` → envia las tx reales a la red
+- `--slow` → espera entre cada tx para no rate-limitear
+- Sin `--broadcast` solo simula (dry-run)
+
+### 9. Actualizar el .env con las direcciones deployadas
+
+Del output del script copiar las direcciones y reemplazar en `.env`:
+
+```
+BLOCKCHAIN_IDEA_TOKEN=0x33B18AEC70b0855B2b74e133e33e5d4Ba2Cd6ED3
+BLOCKCHAIN_IDEAFY_FACTORY=0xBaEF76e4b3C27EC49b1530a571A44f2Cdaf74a79
+BLOCKCHAIN_OFFERING_CONTRACT=0x85991B2Fb250Cea9D0D65fBa719340f290e0b653
+BLOCKCHAIN_DIVIDEND_DISTRIBUTOR=0x0f2d8472b8fEFFd4106d30935D53714E0629950E
+BLOCKCHAIN_IDEA_SWAP=0x9e8B8ad9C2210c94923C8df905DFa28e4Dd724d8
+BLOCKCHAIN_IDEA_MARKETPLACE=0x9256b06aa14208A9B0172dd5cDe608e8fBEACc16
+BLOCKCHAIN_IDEA_GOVERNANCE=0xC084E06697bf855Ce2DBBAbA6DbC0FB23f8b6764
+```
+
+### 10. Por que funciona con el backend
+
+El backend (Java) ya tiene servicios que llaman a estos contratos:
+
+| Servicio Java | Contrato que llama | Rol asignado en deploy |
+|---|---|---|
+| IdeafyFactoryService.java | IdeafyFactory.launchProject() | CREATOR_ROLE |
+| OfferingContractService.java | OfferingContract.registerOffering() | ADMIN_ROLE |
+| TokenizationService.java | IdeafyFactory (fallback: InvestmentSwap, TokenFactory) | N/A |
+| DividendDistributorService | DividendDistributor.claimDividends() | Publico |
+| IdeaSwapService | IdeaSwap.swap() | Publico |
+| MarketplaceService | IdeaMarketplace.* | Publico |
+| GovernanceService | IdeaGovernance.* | Publico |
+
+Los contratos viejos (InvestmentSwap y TokenFactory) se quedan en `.env` pero el sistema los ignora porque IdeafyFactory funciona correctamente (primer nivel de fallback).
