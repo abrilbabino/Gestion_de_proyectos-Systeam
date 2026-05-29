@@ -22,4 +22,7 @@ public class ProjectResponse {
     private Long creadorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean esDestacado;
+    private LocalDateTime fechaBoost;
+    private BigDecimal montoBoost;
 }

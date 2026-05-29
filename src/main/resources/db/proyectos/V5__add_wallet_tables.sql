@@ -22,19 +22,24 @@ CREATE TABLE IF NOT EXISTS portfolio_activos (
 
 UPDATE users SET saldo_idea = 10000.00, saldo_usdt = 5000.00 WHERE saldo_idea = 0;
 
-INSERT INTO subtokens (nombre, suministro_total, cupo_restante, precio_actual) VALUES
+INSERT INTO subtokens (nombre, suministro_total, cupo_restante, precio_actual)
+SELECT * FROM (VALUES
     ('IDEA',  1000000, 750000, 1.50),
     ('TKN-A',   50000,  32000, 2.75),
-    ('TKN-B',  100000,  88000, 0.85);
+    ('TKN-B',  100000,  88000, 0.85)
+) AS v(nombre, suministro_total, cupo_restante, precio_actual)
+WHERE NOT EXISTS (SELECT 1 FROM subtokens);
 
 INSERT INTO portfolio_activos (usuario_id, subtoken_id, cantidad)
 SELECT u.id, s.id, 250
 FROM users u, subtokens s
 WHERE u.id = (SELECT MIN(id) FROM users)
-  AND s.nombre = 'TKN-A';
+  AND s.nombre = 'TKN-A'
+  AND NOT EXISTS (SELECT 1 FROM portfolio_activos);
 
 INSERT INTO portfolio_activos (usuario_id, subtoken_id, cantidad)
 SELECT u.id, s.id, 100
 FROM users u, subtokens s
 WHERE u.id = (SELECT MIN(id) FROM users)
-  AND s.nombre = 'TKN-B';
+  AND s.nombre = 'TKN-B'
+  AND NOT EXISTS (SELECT 1 FROM portfolio_activos);

@@ -43,6 +43,7 @@ blockchain/compiled/
 blockchain/out/
 blockchain/cache/
 blockchain/lib/
+blockchain/broadcast/
 node_modules/
 package-lock.json
 package.json

@@ -158,8 +158,8 @@ public class ProjectService {
 
     private boolean isValidTransition(String from, String to) {
         return switch (from) {
-            case "PREPARACION" -> "FINANCIAMIENTO".equals(to);
-            case "FINANCIAMIENTO" -> "EJECUCION".equals(to) || "FINALIZADO".equals(to);
+            case "PREPARACION" -> "FINANCIAMIENTO".equals(to) || "CANCELADO".equals(to);
+            case "FINANCIAMIENTO" -> "EJECUCION".equals(to) || "FINALIZADO".equals(to) || "CANCELADO".equals(to);
             case "EJECUCION" -> "FINALIZADO".equals(to);
             default -> false;
         };
@@ -180,6 +180,9 @@ public class ProjectService {
                 .creadorId(proyecto.getCreador() != null ? proyecto.getCreador().getId() : null)
                 .createdAt(proyecto.getCreatedAt())
                 .updatedAt(proyecto.getUpdatedAt())
+                .esDestacado(proyecto.getEsDestacado())
+                .fechaBoost(proyecto.getFechaBoost())
+                .montoBoost(proyecto.getMontoBoost())
                 .build();
     }
 }

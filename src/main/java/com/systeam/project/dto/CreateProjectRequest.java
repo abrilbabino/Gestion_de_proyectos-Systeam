@@ -25,12 +25,16 @@ public class CreateProjectRequest {
     @DecimalMin(value = "0.01", message = "El monto requerido debe ser mayor a cero")
     private BigDecimal montoRequerido;
 
+    @NotNull(message = "El plazo es obligatorio")
     private LocalDateTime plazo;
+
     private Boolean gobernanzaComunidad;
 
+    @NotNull(message = "El cupo maximo de tokens es obligatorio")
     @Min(value = 1, message = "El cupo maximo de tokens debe ser al menos 1")
     private Integer cupoMaximoTokens;
 
+    @NotNull(message = "El valor nominal del token es obligatorio")
     @DecimalMin(value = "0.01", message = "El valor nominal del token debe ser mayor a cero")
     private BigDecimal valorNominalToken;
 }

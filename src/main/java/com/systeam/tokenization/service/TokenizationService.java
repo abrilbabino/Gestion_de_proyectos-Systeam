@@ -42,7 +42,7 @@ public class TokenizationService {
 
     @Transactional
     public String crearTokenParaProyecto(Long proyectoId, String titulo, Integer cupoMaximoTokens, BigDecimal valorNominal) {
-        String tokenName = "Proyecto " + titulo + " Token";
+        String tokenName = titulo.length() > 20 ? titulo.substring(0, 17) + "..." : titulo;
         String tokenSymbol = "p" + proyectoId.toString().substring(0, Math.min(4, proyectoId.toString().length()));
         int supply = cupoMaximoTokens != null ? cupoMaximoTokens : 100000;
         BigInteger supplyInicial = BigInteger.valueOf(supply);

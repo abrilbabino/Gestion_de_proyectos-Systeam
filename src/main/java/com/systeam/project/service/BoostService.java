@@ -36,6 +36,13 @@ public class BoostService {
             throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + proyectoId);
         }
 
+        Boolean yaDestacado = jdbc.queryForObject(
+            "SELECT es_destacado FROM projects WHERE id = ?", Boolean.class, proyectoId
+        );
+        if (Boolean.TRUE.equals(yaDestacado)) {
+            throw new ConflictException("El proyecto ya está destacado");
+        }
+
         BigDecimal saldo = jdbc.queryForObject(
             "SELECT saldo_idea FROM users WHERE id = ?", BigDecimal.class, usuarioId
         );

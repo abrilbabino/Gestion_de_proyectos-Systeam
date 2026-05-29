@@ -18,11 +18,21 @@ CREATE INDEX IF NOT EXISTS idx_investments_estado ON investments(estado);
 CREATE INDEX IF NOT EXISTS idx_investments_tx_hash ON investments(tx_hash);
 CREATE INDEX IF NOT EXISTS idx_subtokens_proyecto_id ON subtokens(proyecto_id);
 
-ALTER TABLE investments ADD CONSTRAINT chk_investment_estado
-    CHECK (estado IN ('PENDIENTE', 'CONFIRMADA', 'RECHAZADA', 'REEMBOLSADA'));
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_investment_estado') THEN
+        ALTER TABLE investments ADD CONSTRAINT chk_investment_estado
+            CHECK (estado IN ('PENDIENTE', 'CONFIRMADA', 'RECHAZADA', 'REEMBOLSADA'));
+    END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_usuario_subtoken
     ON portfolio_activos(usuario_id, subtoken_id);
 
-ALTER TABLE subtokens ADD CONSTRAINT fk_subtokens_proyecto
-    FOREIGN KEY (proyecto_id) REFERENCES projects(id);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_subtokens_proyecto') THEN
+        ALTER TABLE subtokens ADD CONSTRAINT fk_subtokens_proyecto
+            FOREIGN KEY (proyecto_id) REFERENCES projects(id);
+    END IF;
+END $$;
