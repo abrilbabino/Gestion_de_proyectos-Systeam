@@ -59,4 +59,16 @@ public class DashboardRepository {
             BigDecimal.class
         );
     }
+
+    public List<java.util.Map<String, Object>> getTopProjectsByInvestors() {
+        return jdbc.queryForList(
+            "SELECT p.id, p.titulo AS name, COUNT(DISTINCT i.usuario_id) AS inversores " +
+            "FROM projects p " +
+            "LEFT JOIN investments i ON p.id = i.proyecto_id " +
+            "WHERE p.deleted_at IS NULL AND p.estado != 'CANCELADO' " +
+            "GROUP BY p.id, p.titulo " +
+            "ORDER BY inversores DESC " +
+            "LIMIT 5"
+        );
+    }
 }
