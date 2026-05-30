@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,19 +36,22 @@ public class TokenizationService {
     private final TokenizationRepository tokenizationRepository;
     private final OfferingContractService offeringContractService;
     private final BlockchainProperties blockchainProperties;
+    private final JdbcTemplate jdbc;
 
     public TokenizationService(IdeafyFactoryService ideafyFactoryService,
                                InvestmentSwapService investmentSwapService,
                                TokenFactoryService tokenFactoryService,
                                TokenizationRepository tokenizationRepository,
                                OfferingContractService offeringContractService,
-                               BlockchainProperties blockchainProperties) {
+                               BlockchainProperties blockchainProperties,
+                               JdbcTemplate jdbc) {
         this.ideafyFactoryService = ideafyFactoryService;
         this.investmentSwapService = investmentSwapService;
         this.tokenFactoryService = tokenFactoryService;
         this.tokenizationRepository = tokenizationRepository;
         this.offeringContractService = offeringContractService;
         this.blockchainProperties = blockchainProperties;
+        this.jdbc = jdbc;
     }
 
     @Transactional
@@ -81,6 +85,7 @@ public class TokenizationService {
                     registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
                 } else {
                     log.info("Token ya existia en IdeafyFactory para proyecto {}: {}", proyectoId, contractAddress);
+                    registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
                 }
             } catch (Exception e) {
                 log.warn("IdeafyFactory no disponible: {}. Probando InvestmentSwap.", e.getMessage());
@@ -136,10 +141,24 @@ public class TokenizationService {
     @Transactional
     public TokenResponse crearToken(CreateTokenRequest request) {
         String titulo = obtenerTituloProyecto(request.getProyectoId());
+        BigDecimal montoRequerido = null;
+        LocalDateTime plazo = null;
+        try {
+            Map<String, Object> project = jdbc.queryForMap(
+                "SELECT monto_requerido, plazo FROM projects WHERE id = ?", request.getProyectoId());
+            if (project.get("monto_requerido") != null) {
+                montoRequerido = (BigDecimal) project.get("monto_requerido");
+            }
+            if (project.get("plazo") instanceof java.sql.Timestamp ts) {
+                plazo = ts.toLocalDateTime();
+            }
+        } catch (Exception e) {
+            log.warn("No se pudieron obtener datos del proyecto {}: {}", request.getProyectoId(), e.getMessage());
+        }
         String contractAddress = crearTokenParaProyecto(
             request.getProyectoId(), titulo,
             request.getCupoMaximoTokens(), request.getValorNominal(),
-            null, null
+            montoRequerido, plazo
         );
         Map<String, Object> row = tokenizationRepository.findByProjectId(request.getProyectoId())
             .orElseThrow(() -> new ResourceNotFoundException("Token no encontrado tras creacion"));
