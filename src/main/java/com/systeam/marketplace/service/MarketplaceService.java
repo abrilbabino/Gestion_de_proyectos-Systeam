@@ -174,10 +174,12 @@ public class MarketplaceService {
             JOIN projects p ON p.id = s.proyecto_id
             WHERE ob.estado = 'ACTIVE' AND ob.cantidad > 0
             ORDER BY ob.created_at DESC
-            OFFSET ? LIMIT ?
+            LIMIT ? OFFSET ?
             """;
+
+        // IMPORTANTE: Se invirtió el orden a getPageSize() (para el LIMIT) y luego getOffset()
         List<ListingResponse> listings = jdbc.query(sql, new ListingRowMapper(),
-            pageable.getOffset(), pageable.getPageSize());
+            pageable.getPageSize(), pageable.getOffset());
 
         return new PageImpl<>(listings, pageable, total);
     }
