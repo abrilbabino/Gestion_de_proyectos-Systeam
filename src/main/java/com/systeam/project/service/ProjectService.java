@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,14 +29,25 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final TokenizationService tokenizationService;
+    private final JdbcTemplate jdbc;
 
     public ProjectService(ProjectRepository projectRepository,
-                          TokenizationService tokenizationService) {
+                          TokenizationService tokenizationService,
+                          JdbcTemplate jdbc) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
+        this.jdbc = jdbc;
     }
 
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
+        String simbolo = request.getSimbolo().toUpperCase();
+
+        Integer count = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM projects WHERE simbolo = ?", Integer.class, simbolo);
+        if (count != null && count > 0) {
+            throw new ConflictException("El simbolo '" + simbolo + "' ya esta en uso por otro proyecto");
+        }
+
         Usuario creador = new Usuario();
         creador.setId(creadorId);
 
@@ -50,7 +62,9 @@ public class ProjectService {
         proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
         proyecto.setValorNominalToken(request.getValorNominalToken());
 
-        return toResponse(projectRepository.save(proyecto));
+        Proyecto saved = projectRepository.save(proyecto);
+        jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", simbolo, saved.getId());
+        return toResponse(saved, simbolo);
     }
 
     public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
@@ -68,15 +82,20 @@ public class ProjectService {
         if (request.getCupoMaximoTokens() != null) proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
         if (request.getValorNominalToken() != null) proyecto.setValorNominalToken(request.getValorNominalToken());
 
-        return toResponse(projectRepository.save(proyecto));
+        Proyecto saved = projectRepository.save(proyecto);
+        if (request.getSimbolo() != null) {
+            jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", request.getSimbolo(), id);
+        }
+        return toResponse(saved, obtenerSimbolo(id));
     }
 
     public ProjectResponse getProjectById(Long id) {
-        return toResponse(findProjectOrThrow(id));
+        Proyecto proyecto = findProjectOrThrow(id);
+        return toResponse(proyecto, obtenerSimbolo(id));
     }
 
     public Page<ProjectResponse> getAllProjects(Pageable pageable) {
-        return projectRepository.findAll(pageable).map(this::toResponse);
+        return projectRepository.findAll(pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
     public Page<ProjectResponse> getPublicCatalog(String estado, String search, Pageable pageable) {
@@ -87,11 +106,11 @@ public class ProjectService {
         }
 
         String estadoFiltro = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
-        return projectRepository.findByFilters(estadoFiltro, search, pageable).map(this::toResponse);
+        return projectRepository.findByFilters(estadoFiltro, search, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
     public Page<ProjectResponse> getProjectsByCreator(Long creadorId, Pageable pageable) {
-        return projectRepository.findByCreadorId(creadorId, pageable).map(this::toResponse);
+        return projectRepository.findByCreadorId(creadorId, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
     @Transactional
@@ -117,14 +136,25 @@ public class ProjectService {
     }
 
     private void crearSubtokenParaProyecto(Proyecto proyecto) {
+        String simbolo = obtenerSimbolo(proyecto.getId());
         tokenizationService.crearTokenParaProyecto(
             proyecto.getId(),
             proyecto.getTitulo(),
+            simbolo,
             proyecto.getCupoMaximoTokens(),
             proyecto.getValorNominalToken(),
             proyecto.getMontoRequerido(),
             proyecto.getPlazo()
         );
+    }
+
+    private String obtenerSimbolo(Long projectId) {
+        try {
+            return jdbc.queryForObject("SELECT simbolo FROM projects WHERE id = ?", String.class, projectId);
+        } catch (Exception e) {
+            log.warn("No se pudo obtener simbolo para proyecto {}: {}", projectId, e.getMessage());
+            return null;
+        }
     }
 
     public ProjectResponse invest(Long projectId, BigDecimal amount) {
@@ -140,7 +170,7 @@ public class ProjectService {
         }
         proyecto.setMontoRecaudado(newAmount);
 
-        return toResponse(projectRepository.save(proyecto));
+        return toResponse(projectRepository.save(proyecto), obtenerSimbolo(projectId));
     }
 
     public void evaluateAndUpdateStates() {
@@ -167,7 +197,7 @@ public class ProjectService {
         };
     }
 
-    private ProjectResponse toResponse(Proyecto proyecto) {
+    private ProjectResponse toResponse(Proyecto proyecto, String simbolo) {
         return ProjectResponse.builder()
                 .id(proyecto.getId())
                 .titulo(proyecto.getTitulo())
@@ -179,6 +209,7 @@ public class ProjectService {
                 .cupoMaximoTokens(proyecto.getCupoMaximoTokens())
                 .valorNominalToken(proyecto.getValorNominalToken())
                 .montoRecaudado(proyecto.getMontoRecaudado())
+                .simbolo(simbolo)
                 .creadorId(proyecto.getCreador() != null ? proyecto.getCreador().getId() : null)
                 .createdAt(proyecto.getCreatedAt())
                 .updatedAt(proyecto.getUpdatedAt())

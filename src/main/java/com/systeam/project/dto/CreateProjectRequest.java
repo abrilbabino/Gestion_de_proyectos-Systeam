@@ -37,4 +37,8 @@ public class CreateProjectRequest {
     @NotNull(message = "El valor nominal del token es obligatorio")
     @DecimalMin(value = "0.01", message = "El valor nominal del token debe ser mayor a cero")
     private BigDecimal valorNominalToken;
+
+    @NotBlank(message = "El simbolo del token es obligatorio")
+    @Size(min = 2, max = 5, message = "El simbolo debe tener entre 2 y 5 caracteres")
+    private String simbolo;
 }

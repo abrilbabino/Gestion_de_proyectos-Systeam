@@ -23,23 +23,23 @@ public class JdbcTokenizationRepository implements TokenizationRepository {
     }
 
     @Override
-    public Long save(Long proyectoId, String nombre, int suministroTotal, BigDecimal precioBase,
+    public Long save(Long proyectoId, String nombre, String simbolo, int suministroTotal, BigDecimal precioBase,
                      BigDecimal factorVolatilidad, String contractAddress) {
         return jdbc.queryForObject("""
             INSERT INTO subtokens (nombre, suministro_total, cupo_restante, precio_actual,
-                                   proyecto_id, precio_base, factor_volatilidad, contract_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                   proyecto_id, precio_base, factor_volatilidad, contract_address, simbolo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """, Long.class,
             nombre, suministroTotal, suministroTotal, precioBase,
-            proyectoId, precioBase, factorVolatilidad, contractAddress);
+            proyectoId, precioBase, factorVolatilidad, contractAddress, simbolo);
     }
 
     @Override
     public Optional<Map<String, Object>> findById(Long id) {
         try {
             Map<String, Object> row = jdbc.queryForMap("""
-                SELECT s.id, s.nombre, s.suministro_total, s.cupo_restante,
+                SELECT s.id, s.nombre, s.simbolo, s.suministro_total, s.cupo_restante,
                        s.precio_actual, s.precio_base, s.factor_volatilidad,
                        s.contract_address, s.proyecto_id, p.titulo AS proyectoTitulo,
                        s.created_at, s.updated_at
@@ -57,7 +57,7 @@ public class JdbcTokenizationRepository implements TokenizationRepository {
     public Optional<Map<String, Object>> findByProjectId(Long proyectoId) {
         try {
             Map<String, Object> row = jdbc.queryForMap("""
-                SELECT s.id, s.nombre, s.suministro_total, s.cupo_restante,
+                SELECT s.id, s.nombre, s.simbolo, s.suministro_total, s.cupo_restante,
                        s.precio_actual, s.precio_base, s.factor_volatilidad,
                        s.contract_address, s.proyecto_id, p.titulo AS proyectoTitulo,
                        s.created_at, s.updated_at
@@ -74,7 +74,7 @@ public class JdbcTokenizationRepository implements TokenizationRepository {
     @Override
     public List<Map<String, Object>> findAll() {
         return jdbc.queryForList("""
-            SELECT s.id, s.nombre, s.suministro_total, s.cupo_restante,
+            SELECT s.id, s.nombre, s.simbolo, s.suministro_total, s.cupo_restante,
                    s.precio_actual, s.precio_base, s.factor_volatilidad,
                    s.contract_address, s.proyecto_id, p.titulo AS proyectoTitulo,
                    s.created_at, s.updated_at
@@ -89,7 +89,7 @@ public class JdbcTokenizationRepository implements TokenizationRepository {
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM subtokens", Long.class);
 
         List<Map<String, Object>> rows = jdbc.queryForList("""
-            SELECT s.id, s.nombre, s.suministro_total, s.cupo_restante,
+            SELECT s.id, s.nombre, s.simbolo, s.suministro_total, s.cupo_restante,
                    s.precio_actual, s.precio_base, s.factor_volatilidad,
                    s.contract_address, s.proyecto_id, p.titulo AS proyectoTitulo,
                    s.created_at, s.updated_at

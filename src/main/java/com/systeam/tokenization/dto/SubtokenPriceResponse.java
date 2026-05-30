@@ -12,12 +12,14 @@ public class SubtokenPriceResponse {
     private int vendidos;
     private BigDecimal factorDemanda;
     private BigDecimal factorRendimiento;
+    private BigDecimal sobreOferta;
 
     public SubtokenPriceResponse() {}
 
     public SubtokenPriceResponse(Long proyectoId, BigDecimal precioActual, BigDecimal precioBase,
                                   int suministroTotal, int cupoRestante,
-                                  BigDecimal factorDemanda, BigDecimal factorRendimiento) {
+                                  BigDecimal factorDemanda, BigDecimal factorRendimiento,
+                                  BigDecimal sobreOferta) {
         this.proyectoId = proyectoId;
         this.precioActual = precioActual;
         this.precioBase = precioBase;
@@ -26,6 +28,7 @@ public class SubtokenPriceResponse {
         this.vendidos = suministroTotal - cupoRestante;
         this.factorDemanda = factorDemanda;
         this.factorRendimiento = factorRendimiento;
+        this.sobreOferta = sobreOferta;
     }
 
     public Long getProyectoId() { return proyectoId; }
@@ -36,4 +39,5 @@ public class SubtokenPriceResponse {
     public int getVendidos() { return vendidos; }
     public BigDecimal getFactorDemanda() { return factorDemanda; }
     public BigDecimal getFactorRendimiento() { return factorRendimiento; }
+    public BigDecimal getSobreOferta() { return sobreOferta; }
 }

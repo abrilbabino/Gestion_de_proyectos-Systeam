@@ -9,7 +9,7 @@ import org.springframework.data.domain.Pageable;
 
 public interface TokenizationRepository {
 
-    Long save(Long proyectoId, String nombre, int suministroTotal, java.math.BigDecimal precioBase,
+    Long save(Long proyectoId, String nombre, String simbolo, int suministroTotal, java.math.BigDecimal precioBase,
               java.math.BigDecimal factorVolatilidad, String contractAddress);
 
     Optional<Map<String, Object>> findById(Long id);

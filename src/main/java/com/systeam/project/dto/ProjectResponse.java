@@ -19,6 +19,7 @@ public class ProjectResponse {
     private Integer cupoMaximoTokens;
     private BigDecimal valorNominalToken;
     private BigDecimal montoRecaudado;
+    private String simbolo;
     private Long creadorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

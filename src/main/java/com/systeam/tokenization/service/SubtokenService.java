@@ -24,12 +24,13 @@ public class SubtokenService {
 
     public Map<String, Object> findSubtokenByProject(Long proyectoId) {
         List<Map<String, Object>> results = jdbc.query(
-            "SELECT id, cupo_restante, precio_actual, precio_base, suministro_total, " +
+            "SELECT id, simbolo, cupo_restante, precio_actual, precio_base, suministro_total, " +
             "factor_volatilidad, contract_address " +
             "FROM subtokens WHERE proyecto_id = ?",
             (rs, rowNum) -> {
                 Map<String, Object> m = new HashMap<>();
                 m.put("id", rs.getLong("id"));
+                m.put("simbolo", rs.getString("simbolo"));
                 m.put("cupo_restante", rs.getInt("cupo_restante"));
                 m.put("precio_actual", rs.getBigDecimal("precio_actual"));
                 m.put("precio_base", rs.getBigDecimal("precio_base"));
@@ -46,9 +47,33 @@ public class SubtokenService {
     public BigDecimal calcularPrecio(BigDecimal precioBase, int suministroTotal, int cupoRestante,
                                       BigDecimal factorVolatilidad, Long proyectoId) {
         BigDecimal factorRendimiento = obtenerFactorRendimiento(proyectoId);
+        BigDecimal sobreOferta = obtenerSobreOferta(proyectoId);
         return pricingService.calcularPrecioDinamico(
-            precioBase, suministroTotal, cupoRestante, factorVolatilidad, factorRendimiento
+            precioBase, suministroTotal, cupoRestante, factorVolatilidad, factorRendimiento, sobreOferta
         );
+    }
+
+    public BigDecimal obtenerSobreOferta(Long proyectoId) {
+        List<Map<String, Object>> subtokens = jdbc.query(
+            "SELECT id, suministro_total FROM subtokens WHERE proyecto_id = ?",
+            (rs, rowNum) -> Map.of("id", rs.getLong("id"), "total", rs.getInt("suministro_total")),
+            proyectoId
+        );
+        if (subtokens.isEmpty()) return BigDecimal.ZERO;
+
+        Long subtokenId = (Long) subtokens.get(0).get("id");
+        int total = (int) subtokens.get(0).get("total");
+        if (total <= 0) return BigDecimal.ZERO;
+
+        Integer cantidadListada = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(cantidad), 0) FROM order_book WHERE subtoken_id = ? AND estado = 'ACTIVE'",
+            Integer.class, subtokenId
+        );
+        if (cantidadListada == null || cantidadListada <= 0) return BigDecimal.ZERO;
+
+        BigDecimal ratio = BigDecimal.valueOf(cantidadListada)
+            .divide(BigDecimal.valueOf(total), 4, RoundingMode.HALF_UP);
+        return ratio.min(BigDecimal.ONE);
     }
 
     public SubtokenPriceResponse obtenerPrecioConDetalle(Long proyectoId) {
@@ -66,11 +91,32 @@ public class SubtokenService {
             : BigDecimal.ZERO;
         BigDecimal factorDemanda = demandaRelativa.multiply(factorVolatilidad);
 
-        BigDecimal factorRendimiento = obtenerFactorRendimiento(proyectoId);
-        BigDecimal precio = calcularPrecio(precioBase, suministroTotal, cupoRestante, factorVolatilidad, proyectoId);
+        String estado = obtenerEstadoProyecto(proyectoId);
+
+        BigDecimal precio;
+        BigDecimal factorRendimiento;
+        BigDecimal sobreOferta;
+
+        if ("FINANCIAMIENTO".equals(estado)) {
+            precio = precioBase;
+            factorRendimiento = BigDecimal.ZERO;
+            sobreOferta = BigDecimal.ZERO;
+        } else {
+            factorRendimiento = obtenerFactorRendimiento(proyectoId);
+            sobreOferta = obtenerSobreOferta(proyectoId);
+            precio = calcularPrecio(precioBase, suministroTotal, cupoRestante, factorVolatilidad, proyectoId);
+        }
 
         return new SubtokenPriceResponse(proyectoId, precio, precioBase,
-            suministroTotal, cupoRestante, factorDemanda, factorRendimiento);
+            suministroTotal, cupoRestante, factorDemanda, factorRendimiento, sobreOferta);
+    }
+
+    private String obtenerEstadoProyecto(Long proyectoId) {
+        try {
+            return jdbc.queryForObject("SELECT estado FROM projects WHERE id = ?", String.class, proyectoId);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public BigDecimal obtenerFactorRendimiento(Long proyectoId) {
@@ -94,18 +140,8 @@ public class SubtokenService {
         switch (estado) {
             case "PREPARACION":
                 return new BigDecimal("0.00");
-            case "FINANCIAMIENTO": {
-                BigDecimal montoRecaudado = (BigDecimal) project.get("monto_recaudado");
-                BigDecimal montoRequerido = (BigDecimal) project.get("monto_requerido");
-                if (montoRequerido == null || montoRequerido.compareTo(BigDecimal.ZERO) <= 0) {
-                    return new BigDecimal("0.15");
-                }
-                BigDecimal progreso = montoRecaudado.divide(montoRequerido, 4, RoundingMode.HALF_UP);
-                // Factor base 0.15 + hasta 0.20 extra por progreso de financiamiento
-                return new BigDecimal("0.15").add(
-                    progreso.multiply(new BigDecimal("0.20"))
-                ).min(new BigDecimal("0.35"));
-            }
+            case "FINANCIAMIENTO":
+                return BigDecimal.ZERO;
             case "EJECUCION":
                 return new BigDecimal("0.50");
             case "FINALIZADO":

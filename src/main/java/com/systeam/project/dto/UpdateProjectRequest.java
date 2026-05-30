@@ -28,4 +28,7 @@ public class UpdateProjectRequest {
 
     @DecimalMin(value = "0.01", message = "El valor nominal del token debe ser mayor a cero")
     private BigDecimal valorNominalToken;
+
+    @Size(min = 2, max = 5, message = "El simbolo debe tener entre 2 y 5 caracteres")
+    private String simbolo;
 }

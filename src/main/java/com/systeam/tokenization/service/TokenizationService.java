@@ -55,15 +55,19 @@ public class TokenizationService {
     }
 
     @Transactional
-    public String crearTokenParaProyecto(Long proyectoId, String titulo, Integer cupoMaximoTokens, BigDecimal valorNominal) {
-        return crearTokenParaProyecto(proyectoId, titulo, cupoMaximoTokens, valorNominal, null, null);
+    public String crearTokenParaProyecto(Long proyectoId, String titulo, String simbolo,
+                                         Integer cupoMaximoTokens, BigDecimal valorNominal) {
+        return crearTokenParaProyecto(proyectoId, titulo, simbolo, cupoMaximoTokens, valorNominal, null, null);
     }
 
     @Transactional
-    public String crearTokenParaProyecto(Long proyectoId, String titulo, Integer cupoMaximoTokens,
+    public String crearTokenParaProyecto(Long proyectoId, String titulo, String simbolo,
+                                         Integer cupoMaximoTokens,
                                          BigDecimal valorNominal, BigDecimal montoRequerido, LocalDateTime plazo) {
         String tokenName = titulo.length() > 20 ? titulo.substring(0, 17) + "..." : titulo;
-        String tokenSymbol = "p" + proyectoId.toString().substring(0, Math.min(4, proyectoId.toString().length()));
+        String tokenSymbol = (simbolo != null && !simbolo.isBlank())
+            ? simbolo
+            : "p" + proyectoId.toString().substring(0, Math.min(4, proyectoId.toString().length()));
         int supply = cupoMaximoTokens != null ? cupoMaximoTokens : 100000;
         BigInteger supplyInicial = BigInteger.valueOf(supply);
 
@@ -129,7 +133,7 @@ public class TokenizationService {
 
         BigDecimal valorNominalFinal = valorNominal != null ? valorNominal : BigDecimal.ONE;
 
-        tokenizationRepository.save(proyectoId, tokenName, supply, valorNominalFinal,
+        tokenizationRepository.save(proyectoId, tokenName, tokenSymbol, supply, valorNominalFinal,
             new BigDecimal("0.50"), contractAddress);
 
         log.info("Subtoken creado en DB para proyecto {}: {} (supply={}, precio={})",
@@ -141,11 +145,13 @@ public class TokenizationService {
     @Transactional
     public TokenResponse crearToken(CreateTokenRequest request) {
         String titulo = obtenerTituloProyecto(request.getProyectoId());
+        String simbolo = null;
         BigDecimal montoRequerido = null;
         LocalDateTime plazo = null;
         try {
             Map<String, Object> project = jdbc.queryForMap(
-                "SELECT monto_requerido, plazo FROM projects WHERE id = ?", request.getProyectoId());
+                "SELECT simbolo, monto_requerido, plazo FROM projects WHERE id = ?", request.getProyectoId());
+            simbolo = (String) project.get("simbolo");
             if (project.get("monto_requerido") != null) {
                 montoRequerido = (BigDecimal) project.get("monto_requerido");
             }
@@ -156,7 +162,7 @@ public class TokenizationService {
             log.warn("No se pudieron obtener datos del proyecto {}: {}", request.getProyectoId(), e.getMessage());
         }
         String contractAddress = crearTokenParaProyecto(
-            request.getProyectoId(), titulo,
+            request.getProyectoId(), titulo, simbolo,
             request.getCupoMaximoTokens(), request.getValorNominal(),
             montoRequerido, plazo
         );
@@ -209,6 +215,7 @@ public class TokenizationService {
             .proyectoId(toLong(row.get("proyecto_id")))
             .proyectoTitulo((String) row.get("proyectoTitulo"))
             .nombre((String) row.get("nombre"))
+            .simbolo((String) row.get("simbolo"))
             .suministroTotal(toInt(row.get("suministro_total")))
             .cupoRestante(toInt(row.get("cupo_restante")))
             .precioActual(toBigDecimal(row.get("precio_actual")))

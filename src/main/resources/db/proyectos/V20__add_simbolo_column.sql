@@ -1,0 +1,4 @@
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS simbolo VARCHAR(5);
+ALTER TABLE subtokens ADD COLUMN IF NOT EXISTS simbolo VARCHAR(5);
+ALTER TABLE projects ADD CONSTRAINT IF NOT EXISTS uq_projects_simbolo UNIQUE (simbolo);
+ALTER TABLE subtokens ADD CONSTRAINT IF NOT EXISTS uq_subtokens_simbolo UNIQUE (simbolo);
