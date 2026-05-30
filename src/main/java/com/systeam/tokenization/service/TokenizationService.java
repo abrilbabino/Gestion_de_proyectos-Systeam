@@ -70,9 +70,10 @@ public class TokenizationService {
             try {
                 contractAddress = ideafyFactoryService.obtenerTokenDeProyecto(proyectoId);
                 if (contractAddress == null) {
+                    String creator = blockchainProperties.getTreasuryAddress();
                     contractAddress = ideafyFactoryService.launchProject(
                         proyectoId, 1, 4000,
-                        "0x0000000000000000000000000000000000000000",
+                        creator,
                         tokenName, tokenSymbol, supplyInicial
                     );
                     log.info("Token creado via IdeafyFactory para proyecto {}: {} -> {}",
