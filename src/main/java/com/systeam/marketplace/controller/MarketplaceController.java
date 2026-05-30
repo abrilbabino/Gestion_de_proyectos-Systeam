@@ -45,7 +45,7 @@ public class MarketplaceController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return marketplaceService.listActiveListings(
-            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "created_at")));
+            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
     }
 
     @GetMapping("/listings/{id}")
