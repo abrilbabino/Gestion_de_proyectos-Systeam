@@ -15,4 +15,5 @@ public class DashboardStatsResponse {
     private long activeProjects;
     private Map<String, Long> projectsByStatus;
     private BigDecimal totalRequiredAmount;
+    private java.util.List<Map<String, Object>> topProyectosInversores;
 }

@@ -37,6 +37,7 @@ public class DashboardService {
                 .activeProjects(activeProjects)
                 .projectsByStatus(projectsByStatus)
                 .totalRequiredAmount(dashboardRepository.sumRequiredAmount())
+                .topProyectosInversores(dashboardRepository.getTopProjectsByInvestors())
                 .build();
     }
 }
