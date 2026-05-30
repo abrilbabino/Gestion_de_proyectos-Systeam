@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.verify;
@@ -149,8 +150,9 @@ class ProjectServiceTest {
 
         verify(projectRepository).save(any(Proyecto.class));
         verify(tokenizationService).crearTokenParaProyecto(
-            proyectoBase.getId(), proyectoBase.getTitulo(),
-            proyectoBase.getCupoMaximoTokens(), proyectoBase.getValorNominalToken());
+            eq(proyectoBase.getId()), eq(proyectoBase.getTitulo()),
+            eq(proyectoBase.getCupoMaximoTokens()), eq(proyectoBase.getValorNominalToken()),
+            eq(proyectoBase.getMontoRequerido()), any());
     }
 
     @Test
@@ -198,8 +200,9 @@ class ProjectServiceTest {
 
         verify(projectRepository).save(any(Proyecto.class));
         verify(tokenizationService).crearTokenParaProyecto(
-            proyectoBase.getId(), proyectoBase.getTitulo(),
-            proyectoBase.getCupoMaximoTokens(), proyectoBase.getValorNominalToken());
+            eq(proyectoBase.getId()), eq(proyectoBase.getTitulo()),
+            eq(proyectoBase.getCupoMaximoTokens()), eq(proyectoBase.getValorNominalToken()),
+            eq(proyectoBase.getMontoRequerido()), any());
     }
 
     @Test

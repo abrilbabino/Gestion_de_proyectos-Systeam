@@ -3,6 +3,8 @@ package com.systeam.tokenization.service;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.InvestmentSwapService;
+import com.systeam.blockchain.service.OfferingContractService;
+import com.systeam.config.BlockchainProperties;
 import com.systeam.tokenization.service.TokenFactoryService;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.dto.CreateTokenRequest;
@@ -29,19 +33,31 @@ public class TokenizationService {
     private final InvestmentSwapService investmentSwapService;
     private final TokenFactoryService tokenFactoryService;
     private final TokenizationRepository tokenizationRepository;
+    private final OfferingContractService offeringContractService;
+    private final BlockchainProperties blockchainProperties;
 
     public TokenizationService(IdeafyFactoryService ideafyFactoryService,
                                InvestmentSwapService investmentSwapService,
                                TokenFactoryService tokenFactoryService,
-                               TokenizationRepository tokenizationRepository) {
+                               TokenizationRepository tokenizationRepository,
+                               OfferingContractService offeringContractService,
+                               BlockchainProperties blockchainProperties) {
         this.ideafyFactoryService = ideafyFactoryService;
         this.investmentSwapService = investmentSwapService;
         this.tokenFactoryService = tokenFactoryService;
         this.tokenizationRepository = tokenizationRepository;
+        this.offeringContractService = offeringContractService;
+        this.blockchainProperties = blockchainProperties;
     }
 
     @Transactional
     public String crearTokenParaProyecto(Long proyectoId, String titulo, Integer cupoMaximoTokens, BigDecimal valorNominal) {
+        return crearTokenParaProyecto(proyectoId, titulo, cupoMaximoTokens, valorNominal, null, null);
+    }
+
+    @Transactional
+    public String crearTokenParaProyecto(Long proyectoId, String titulo, Integer cupoMaximoTokens,
+                                         BigDecimal valorNominal, BigDecimal montoRequerido, LocalDateTime plazo) {
         String tokenName = titulo.length() > 20 ? titulo.substring(0, 17) + "..." : titulo;
         String tokenSymbol = "p" + proyectoId.toString().substring(0, Math.min(4, proyectoId.toString().length()));
         int supply = cupoMaximoTokens != null ? cupoMaximoTokens : 100000;
@@ -61,6 +77,7 @@ public class TokenizationService {
                     );
                     log.info("Token creado via IdeafyFactory para proyecto {}: {} -> {}",
                         proyectoId, tokenSymbol, contractAddress);
+                    registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
                 } else {
                     log.info("Token ya existia en IdeafyFactory para proyecto {}: {}", proyectoId, contractAddress);
                 }
@@ -120,7 +137,8 @@ public class TokenizationService {
         String titulo = obtenerTituloProyecto(request.getProyectoId());
         String contractAddress = crearTokenParaProyecto(
             request.getProyectoId(), titulo,
-            request.getCupoMaximoTokens(), request.getValorNominal()
+            request.getCupoMaximoTokens(), request.getValorNominal(),
+            null, null
         );
         Map<String, Object> row = tokenizationRepository.findByProjectId(request.getProyectoId())
             .orElseThrow(() -> new ResourceNotFoundException("Token no encontrado tras creacion"));
@@ -204,5 +222,38 @@ public class TokenizationService {
         if (val == null) return null;
         if (val instanceof BigDecimal bd) return bd;
         return new BigDecimal(val.toString());
+    }
+
+    private void registrarOffering(Long proyectoId, BigDecimal valorNominal,
+                                   BigDecimal montoRequerido, LocalDateTime plazo) {
+        if (montoRequerido == null || plazo == null) {
+            log.warn("registerOffering omitido para proyecto {}: faltan montoRequerido o plazo", proyectoId);
+            return;
+        }
+        if (valorNominal == null) {
+            log.warn("registerOffering omitido para proyecto {}: falta valorNominal", proyectoId);
+            return;
+        }
+        try {
+            String creator = blockchainProperties.getTreasuryAddress();
+            if (creator == null || creator.equals("0x0000000000000000000000000000000000000000")) {
+                log.warn("registerOffering omitido para proyecto {}: treasury no configurada", proyectoId);
+                return;
+            }
+            BigInteger softCap = montoRequerido.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
+            BigInteger hardCap = softCap;
+            BigInteger pricePerToken = valorNominal.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
+            BigInteger startTime = BigInteger.valueOf(System.currentTimeMillis() / 1000);
+            BigInteger endTime = BigInteger.valueOf(plazo.toEpochSecond(ZoneOffset.UTC));
+
+            offeringContractService.registerOffering(
+                BigInteger.valueOf(proyectoId), creator,
+                softCap, hardCap, pricePerToken, startTime, endTime
+            );
+            log.info("Offering registrada para proyecto {}: softCap={}, price={}, endTime={}",
+                proyectoId, softCap, pricePerToken, endTime);
+        } catch (Exception e) {
+            log.error("Error registrando offering para proyecto {}: {}", proyectoId, e.getMessage());
+        }
     }
 }

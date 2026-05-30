@@ -121,7 +121,9 @@ public class ProjectService {
             proyecto.getId(),
             proyecto.getTitulo(),
             proyecto.getCupoMaximoTokens(),
-            proyecto.getValorNominalToken()
+            proyecto.getValorNominalToken(),
+            proyecto.getMontoRequerido(),
+            proyecto.getPlazo()
         );
     }
 
