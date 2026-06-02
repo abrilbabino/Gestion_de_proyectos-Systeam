@@ -63,6 +63,7 @@ class ProjectServiceTest {
     void createProject_debeCrearProyectoConEstadoPreparacion() {
         CreateProjectRequest request = new CreateProjectRequest();
         request.setTitulo("Nuevo Proyecto");
+        request.setSimbolo("NVP");
         request.setDescripcion("Descripcion del nuevo proyecto");
         request.setMontoRequerido(new BigDecimal("5000.00"));
         request.setGobernanzaComunidad(true);
@@ -86,6 +87,7 @@ class ProjectServiceTest {
     void createProject_gobernanzaComunitariaDefaultFalse() {
         CreateProjectRequest request = new CreateProjectRequest();
         request.setTitulo("Titulo");
+        request.setSimbolo("TEST");
         request.setDescripcion("Descripcion");
         request.setMontoRequerido(new BigDecimal("1000.00"));
 
@@ -151,6 +153,7 @@ class ProjectServiceTest {
         verify(projectRepository).save(any(Proyecto.class));
         verify(tokenizationService).crearTokenParaProyecto(
             eq(proyectoBase.getId()), eq(proyectoBase.getTitulo()),
+            any(),
             eq(proyectoBase.getCupoMaximoTokens()), eq(proyectoBase.getValorNominalToken()),
             eq(proyectoBase.getMontoRequerido()), any());
     }
@@ -201,6 +204,7 @@ class ProjectServiceTest {
         verify(projectRepository).save(any(Proyecto.class));
         verify(tokenizationService).crearTokenParaProyecto(
             eq(proyectoBase.getId()), eq(proyectoBase.getTitulo()),
+            any(),
             eq(proyectoBase.getCupoMaximoTokens()), eq(proyectoBase.getValorNominalToken()),
             eq(proyectoBase.getMontoRequerido()), any());
     }
