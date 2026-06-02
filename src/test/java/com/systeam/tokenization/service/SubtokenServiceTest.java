@@ -189,73 +189,12 @@ class SubtokenServiceTest {
     }
 
     @Test
-    void obtenerFactorRendimiento_financiamiento_conMontoRequeridoCero_debeRetornarQuincePorciento() {
-        // Arrange
-        Map<String, Object> mockProject = new HashMap<>();
-        mockProject.put("estado", "FINANCIAMIENTO");
-        mockProject.put("monto_requerido", BigDecimal.ZERO);
-        mockProject.put("monto_recaudado", BigDecimal.ZERO);
-
-        when(jdbc.query(
-            contains("FROM projects"),
-            any(RowMapper.class),
-            eq(proyectoId)
-        )).thenReturn(List.of(mockProject));
-
-        // Act
-        BigDecimal result = subtokenService.obtenerFactorRendimiento(proyectoId);
-
-        // Assert
-        assertThat(result).isEqualByComparingTo("0.15");
-    }
-
-    @Test
-    void obtenerFactorRendimiento_financiamiento_conProgresoCincoPorciento() {
+    void obtenerFactorRendimiento_financiamiento_debeRetornarCero() {
         // Arrange
         Map<String, Object> mockProject = new HashMap<>();
         mockProject.put("estado", "FINANCIAMIENTO");
         mockProject.put("monto_requerido", new BigDecimal("1000.00"));
         mockProject.put("monto_recaudado", new BigDecimal("500.00"));
-
-        when(jdbc.query(
-            contains("FROM projects"),
-            any(RowMapper.class),
-            eq(proyectoId)
-        )).thenReturn(List.of(mockProject));
-
-        // Act
-        BigDecimal result = subtokenService.obtenerFactorRendimiento(proyectoId);
-
-        // Assert
-        assertThat(result).isEqualByComparingTo("0.25");
-    }
-
-    @Test
-    void obtenerFactorRendimiento_financiamiento_progresoMaximoCapTreintaycincoPorciento() {
-        // Arrange
-        Map<String, Object> mockProject = new HashMap<>();
-        mockProject.put("estado", "FINANCIAMIENTO");
-        mockProject.put("monto_requerido", new BigDecimal("1000.00"));
-        mockProject.put("monto_recaudado", new BigDecimal("1200.00"));
-
-        when(jdbc.query(
-            contains("FROM projects"),
-            any(RowMapper.class),
-            eq(proyectoId)
-        )).thenReturn(List.of(mockProject));
-
-        // Act
-        BigDecimal result = subtokenService.obtenerFactorRendimiento(proyectoId);
-
-        // Assert
-        assertThat(result).isEqualByComparingTo("0.35");
-    }
-
-    @Test
-    void obtenerFactorRendimiento_estadoDesconocido_debeRetornarCero() {
-        // Arrange
-        Map<String, Object> mockProject = new HashMap<>();
-        mockProject.put("estado", "DESCONOCIDO");
 
         when(jdbc.query(
             contains("FROM projects"),
@@ -296,6 +235,7 @@ class SubtokenServiceTest {
         mockSubtoken.put("cupo_restante", 400);
         mockSubtoken.put("factor_volatilidad", new BigDecimal("0.50"));
         mockSubtoken.put("contract_address", "0xABC");
+        mockSubtoken.put("total", 1000);
 
         when(jdbc.query(
             contains("FROM subtokens"),

@@ -30,6 +30,7 @@ import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
+import com.systeam.tokenization.service.DynamicPricingService;
 import com.systeam.tokenization.service.SubtokenService;
 
 @Service
@@ -44,6 +45,7 @@ public class InvestmentService {
     private final BlockchainProperties blockchainProperties;
     private final JdbcTemplate jdbc;
     private final SubtokenService subtokenService;
+    private final DynamicPricingService dynamicPricingService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
@@ -51,7 +53,8 @@ public class InvestmentService {
                              OfferingContractService offeringContractService,
                              BlockchainProperties blockchainProperties,
                              JdbcTemplate jdbc,
-                             SubtokenService subtokenService) {
+                             SubtokenService subtokenService,
+                             DynamicPricingService dynamicPricingService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.investmentSwapService = investmentSwapService;
@@ -59,6 +62,7 @@ public class InvestmentService {
         this.blockchainProperties = blockchainProperties;
         this.jdbc = jdbc;
         this.subtokenService = subtokenService;
+        this.dynamicPricingService = dynamicPricingService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request) {
@@ -82,11 +86,12 @@ public class InvestmentService {
 
         int cupoRestante = ((Number) subtoken.get("cupo_restante")).intValue();
         BigDecimal precioBase = (BigDecimal) subtoken.get("precio_base");
-        int suministroTotal = (int) subtoken.get("suministro_total");
-        BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
-        // En fase de FINANCIAMIENTO el precio es fijo e igual al precio base
-        BigDecimal precioSubtoken = precioBase;
+        BigDecimal montoRecaudado = (BigDecimal) proyecto.get("montoRecaudado");
+        BigDecimal montoRequerido = (BigDecimal) proyecto.get("montoRequerido");
+        BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
+            precioBase, montoRecaudado, montoRequerido
+        );
 
         if (cupoRestante <= 0) {
             return ValidateInvestmentResponse.builder()
@@ -151,8 +156,11 @@ public class InvestmentService {
         int suministroTotal = (int) subtoken.get("suministro_total");
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
-        // En fase de FINANCIAMIENTO el precio es fijo e igual al precio base
-        BigDecimal precioSubtoken = precioBase;
+        BigDecimal montoRecaudado = (BigDecimal) proyecto.get("montoRecaudado");
+        BigDecimal montoRequerido = (BigDecimal) proyecto.get("montoRequerido");
+        BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
+            precioBase, montoRecaudado, montoRequerido
+        );
 
         int subTokens = request.getMontoIdea()
                 .divide(precioSubtoken, 0, RoundingMode.DOWN)
@@ -182,6 +190,19 @@ public class InvestmentService {
             BigInteger montoIdeaWei = request.getMontoIdea()
                 .multiply(new BigDecimal("1000000000000000000"))
                 .toBigInteger();
+
+            // Actualizar precio dinámico en el contrato antes de invertir
+            BigInteger precioWei = precioSubtoken
+                .multiply(new BigDecimal("1000000000000000000"))
+                .toBigInteger();
+            try {
+                offeringContractService.updatePricePerToken(
+                    BigInteger.valueOf(request.getProyectoId()), precioWei
+                );
+                log.debug("PricePerToken actualizado en contrato a {}", precioSubtoken);
+            } catch (Exception eUpdate) {
+                log.warn("No se pudo actualizar pricePerToken en contrato: {}", eUpdate.getMessage());
+            }
 
             txHash = offeringContractService.invest(
                 BigInteger.valueOf(request.getProyectoId()),
@@ -318,15 +339,22 @@ public class InvestmentService {
     public void refundAllInvestors(Long proyectoId) {
         List<Inversion> inversiones = investmentRepository.findPendingRefundsByProyectoId(proyectoId);
 
+        BigDecimal precioBase = jdbc.queryForObject(
+            "SELECT precio_base FROM subtokens WHERE proyecto_id = ?", BigDecimal.class, proyectoId
+        );
+
         for (Inversion inv : inversiones) {
-            smartContractService.refundInvestment(proyectoId, inv.getUsuario().getId(), inv.getMontoIdea());
+            int tokens = inv.getSubTokensRecibidos() != null ? inv.getSubTokensRecibidos() : 0;
+            BigDecimal refundAmount = precioBase.multiply(BigDecimal.valueOf(tokens));
+
+            smartContractService.refundInvestment(proyectoId, inv.getUsuario().getId(), refundAmount);
 
             jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?",
-                inv.getMontoIdea(), inv.getUsuario().getId());
+                refundAmount, inv.getUsuario().getId());
 
-            if (inv.getSubTokensRecibidos() != null && inv.getSubTokensRecibidos() > 0) {
+            if (tokens > 0) {
                 subtokenService.removePortfolioEntry(
-                    inv.getUsuario().getId(), proyectoId, inv.getSubTokensRecibidos()
+                    inv.getUsuario().getId(), proyectoId, tokens
                 );
             }
 

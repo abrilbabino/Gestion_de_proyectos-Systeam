@@ -47,6 +47,17 @@ public class MarketplaceService {
         Map<String, Object> seller = findUserOrThrow(sellerId);
         Map<String, Object> subtoken = findSubtokenOrThrow(request.getSubtokenId());
 
+        BigDecimal precioBase = jdbc.queryForObject(
+            "SELECT precio_base FROM subtokens WHERE id = ?", BigDecimal.class, request.getSubtokenId()
+        );
+        BigDecimal precioUnitario = new BigDecimal(request.getPrecioUnitario());
+        BigDecimal precioBaseWei = precioBase.multiply(BigDecimal.TEN.pow(18));
+        if (precioUnitario.compareTo(precioBaseWei) < 0) {
+            throw new ConflictException(
+                "El precio unitario no puede ser menor al precio base (" + precioBase + " $IDEA)"
+            );
+        }
+
         BigInteger portfolioBalance = jdbc.queryForObject(
             "SELECT COALESCE(cantidad, 0) FROM portfolio_activos WHERE usuario_id = ? AND subtoken_id = ?",
             BigInteger.class, sellerId, request.getSubtokenId()

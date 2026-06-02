@@ -38,6 +38,7 @@ import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
+import com.systeam.tokenization.service.DynamicPricingService;
 import com.systeam.tokenization.service.SubtokenService;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +56,9 @@ class InvestmentServiceTest {
 
     @Mock
     private SubtokenService subtokenService;
+
+    @Mock
+    private DynamicPricingService dynamicPricingService;
 
     @Mock
     private InvestmentSwapService investmentSwapService;
@@ -81,6 +85,8 @@ class InvestmentServiceTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         when(blockchainProperties.getTreasuryAddress()).thenReturn("0x7eEA865D2f47B5cC0fF4c8967C1cCf667fEBE50A");
+        when(dynamicPricingService.calcularPrecioFinanciamiento(any(), any(), any()))
+            .thenReturn(new BigDecimal("10.00"));
 
         proyectoFinanciamiento = new Proyecto();
         proyectoFinanciamiento.setId(1L);
@@ -401,6 +407,9 @@ class InvestmentServiceTest {
                 "montoRequerido", new BigDecimal("10000.00"),
                 "montoRecaudado", new BigDecimal("5000.00")
             )));
+
+        when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), anyLong()))
+            .thenReturn(new BigDecimal("10.00"));
 
         when(investmentRepository.findPendingRefundsByProyectoId(1L))
             .thenReturn(List.of(inversionBase));

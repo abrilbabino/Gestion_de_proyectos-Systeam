@@ -19,6 +19,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         uint256 softCap;
         uint256 hardCap;
         uint256 pricePerToken;
+        uint256 basePrice;
         uint256 startTime;
         uint256 endTime;
         bool finalized;
@@ -28,6 +29,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
 
     mapping(uint256 => Offering) public offerings;
     mapping(uint256 => mapping(address => uint256)) public contributions;
+    mapping(uint256 => mapping(address => uint256)) public tokenOwed;
     mapping(uint256 => address[]) public investors;
 
     event OfferingRegistered(uint256 indexed proyectoId, uint256 softCap, uint256 hardCap, uint256 pricePerToken);
@@ -51,6 +53,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         uint256 softCap,
         uint256 hardCap,
         uint256 pricePerToken,
+        uint256 basePrice,
         uint256 startTime,
         uint256 endTime
     ) external onlyRole(ADMIN_ROLE) {
@@ -58,6 +61,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(softCap > 0, "Offering: softCap > 0");
         require(hardCap >= softCap, "Offering: hardCap >= softCap");
         require(pricePerToken > 0, "Offering: pricePerToken > 0");
+        require(basePrice > 0 && basePrice <= pricePerToken, "Offering: 0 < basePrice <= pricePerToken");
         require(startTime < endTime, "Offering: startTime < endTime");
         require(endTime > block.timestamp, "Offering: endTime in future");
         require(creator != address(0), "Offering: invalid creator");
@@ -70,6 +74,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
             softCap: softCap,
             hardCap: hardCap,
             pricePerToken: pricePerToken,
+            basePrice: basePrice,
             startTime: startTime,
             endTime: endTime,
             finalized: false,
@@ -78,6 +83,18 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         });
 
         emit OfferingRegistered(proyectoId, softCap, hardCap, pricePerToken);
+    }
+
+    function updatePricePerToken(uint256 proyectoId, uint256 newPrice) external onlyRole(ADMIN_ROLE) {
+        Offering storage off = offerings[proyectoId];
+        require(off.proyectoId != 0, "Offering: not registered");
+        require(!off.finalized, "Offering: already finalized");
+        require(block.timestamp >= off.startTime, "Offering: not started");
+        require(block.timestamp <= off.endTime, "Offering: ended");
+        require(newPrice >= off.basePrice, "Offering: price below basePrice");
+        require(newPrice <= off.basePrice * 120 / 100, "Offering: price exceeds +20% max");
+
+        off.pricePerToken = newPrice;
     }
 
     function invest(uint256 proyectoId, uint256 ideaAmount) external nonReentrant {
@@ -99,6 +116,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
             investors[proyectoId].push(msg.sender);
         }
         contributions[proyectoId][msg.sender] += ideaAmount;
+        tokenOwed[proyectoId][msg.sender] += tokenAmount;
         off.totalInvested += ideaAmount;
 
         emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount);
@@ -125,29 +143,31 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         Offering storage off = offerings[proyectoId];
         require(off.finalized, "Offering: not finalized");
         require(off.success, "Offering: not successful");
-        uint256 contributed = contributions[proyectoId][msg.sender];
-        require(contributed > 0, "Offering: nothing to claim");
+        uint256 tokens = tokenOwed[proyectoId][msg.sender];
+        require(tokens > 0, "Offering: nothing to claim");
 
+        tokenOwed[proyectoId][msg.sender] = 0;
         contributions[proyectoId][msg.sender] = 0;
-        uint256 tokenAmount = (contributed * 1e18) / off.pricePerToken;
 
-        factory.allocateTokens(proyectoId, msg.sender, tokenAmount);
+        factory.allocateTokens(proyectoId, msg.sender, tokens);
 
-        emit TokensClaimed(proyectoId, msg.sender, tokenAmount);
+        emit TokensClaimed(proyectoId, msg.sender, tokens);
     }
 
     function refund(uint256 proyectoId) external nonReentrant {
         Offering storage off = offerings[proyectoId];
         require(off.finalized, "Offering: not finalized");
         require(!off.success, "Offering: was successful, use claimTokens");
-        uint256 contributed = contributions[proyectoId][msg.sender];
-        require(contributed > 0, "Offering: nothing to refund");
+        uint256 tokens = tokenOwed[proyectoId][msg.sender];
+        require(tokens > 0, "Offering: nothing to refund");
 
+        uint256 refundAmount = (off.basePrice * tokens) / 1e18;
+        tokenOwed[proyectoId][msg.sender] = 0;
         contributions[proyectoId][msg.sender] = 0;
-        require(idea.transfer(msg.sender, contributed),
+        require(idea.transfer(msg.sender, refundAmount),
             "Offering: refund transfer failed");
 
-        emit RefundMade(proyectoId, msg.sender, contributed);
+        emit RefundMade(proyectoId, msg.sender, refundAmount);
     }
 
     function getInvestors(uint256 proyectoId) external view returns (address[] memory) {

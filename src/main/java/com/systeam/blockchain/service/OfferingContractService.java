@@ -43,7 +43,7 @@ public class OfferingContractService {
     public String registerOffering(
             BigInteger proyectoId, String creator,
             BigInteger softCap, BigInteger hardCap, BigInteger pricePerToken,
-            BigInteger startTime, BigInteger endTime
+            BigInteger basePrice, BigInteger startTime, BigInteger endTime
     ) throws Exception {
         String offeringAddress = props.getOfferingContractAddress();
         assertConfigured(offeringAddress, "OfferingContract");
@@ -56,6 +56,7 @@ public class OfferingContractService {
                 new Uint256(softCap),
                 new Uint256(hardCap),
                 new Uint256(pricePerToken),
+                new Uint256(basePrice),
                 new Uint256(startTime),
                 new Uint256(endTime)
             ),
@@ -63,6 +64,22 @@ public class OfferingContractService {
         );
 
         return sendTransaction(offeringAddress, fn, BigInteger.valueOf(500_000L));
+    }
+
+    public String updatePricePerToken(BigInteger proyectoId, BigInteger newPrice) throws Exception {
+        String offeringAddress = props.getOfferingContractAddress();
+        assertConfigured(offeringAddress, "OfferingContract");
+
+        Function fn = new Function(
+            "updatePricePerToken",
+            List.of(
+                new Uint256(proyectoId),
+                new Uint256(newPrice)
+            ),
+            List.of()
+        );
+
+        return sendTransaction(offeringAddress, fn, BigInteger.valueOf(100_000L));
     }
 
     public String invest(BigInteger proyectoId, BigInteger ideaAmount) throws Exception {

@@ -64,6 +64,54 @@ class DynamicPricingServiceTest {
     }
 
     @Test
+    void calcularPrecioFinanciamiento_porDebajoDel70porciento_debeRetornarPrecioBase() {
+        BigDecimal precioBase = new BigDecimal("5.00");
+        BigDecimal montoRequerido = new BigDecimal("10000");
+
+        // 10% recaudado
+        BigDecimal r1 = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("1000"), montoRequerido);
+        assertThat(r1).isEqualByComparingTo("5.00");
+
+        // 50% recaudado
+        BigDecimal r2 = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("5000"), montoRequerido);
+        assertThat(r2).isEqualByComparingTo("5.00");
+
+        // 70% recaudado (exacto en el umbral)
+        BigDecimal r3 = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("7000"), montoRequerido);
+        assertThat(r3).isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    void calcularPrecioFinanciamiento_porEncimaDel70porciento_debeSubirProgresivamente() {
+        BigDecimal precioBase = new BigDecimal("5.00");
+        BigDecimal montoRequerido = new BigDecimal("10000");
+
+        // 85% recaudado → exceso = 15/30 * 20% = 10% → precio = 5.00 * 1.10 = 5.50
+        BigDecimal r1 = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("8500"), montoRequerido);
+        assertThat(r1).isEqualByComparingTo("5.50");
+
+        // 100% recaudado → exceso = 30/30 * 20% = 20% → precio = 5.00 * 1.20 = 6.00
+        BigDecimal r2 = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("10000"), montoRequerido);
+        assertThat(r2).isEqualByComparingTo("6.00");
+    }
+
+    @Test
+    void calcularPrecioFinanciamiento_nuncaSuperaElMaximoDe20porciento() {
+        BigDecimal precioBase = new BigDecimal("5.00");
+        BigDecimal montoRequerido = new BigDecimal("10000");
+
+        // 200% recaudado (hardCap superado) → precio debe ser 6.00 max
+        BigDecimal r = pricingService.calcularPrecioFinanciamiento(precioBase, new BigDecimal("20000"), montoRequerido);
+        assertThat(r).isEqualByComparingTo("6.00");
+    }
+
+    @Test
+    void calcularPrecioFinanciamiento_conMontoRequeridoCero_debeRetornarPrecioBase() {
+        BigDecimal r = pricingService.calcularPrecioFinanciamiento(new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO);
+        assertThat(r).isEqualByComparingTo("5.00");
+    }
+
+    @Test
     void calcularPrecioDinamico_redondeoAConDosDecimales_medioHaciaArriba() {
         BigDecimal precioBase = new BigDecimal("10.005");
         int suministroTotal = 100;

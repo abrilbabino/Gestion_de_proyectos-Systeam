@@ -98,7 +98,11 @@ public class SubtokenService {
         BigDecimal sobreOferta;
 
         if ("FINANCIAMIENTO".equals(estado)) {
-            precio = precioBase;
+            BigDecimal montoRecaudado = obtenerMontoRecaudado(proyectoId);
+            BigDecimal montoRequerido = obtenerMontoRequerido(proyectoId);
+            precio = pricingService.calcularPrecioFinanciamiento(
+                precioBase, montoRecaudado, montoRequerido
+            );
             factorRendimiento = BigDecimal.ZERO;
             sobreOferta = BigDecimal.ZERO;
         } else {
@@ -172,5 +176,29 @@ public class SubtokenService {
             FROM subtokens s
             WHERE pa.subtoken_id = s.id AND s.proyecto_id = ? AND pa.usuario_id = ?
             """, cantidad, proyectoId, usuarioId);
+    }
+
+    public BigDecimal obtenerMontoRecaudado(Long proyectoId) {
+        try {
+            BigDecimal monto = jdbc.queryForObject(
+                "SELECT COALESCE(monto_recaudado, 0) FROM projects WHERE id = ?",
+                BigDecimal.class, proyectoId
+            );
+            return monto != null ? monto : BigDecimal.ZERO;
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    public BigDecimal obtenerMontoRequerido(Long proyectoId) {
+        try {
+            BigDecimal monto = jdbc.queryForObject(
+                "SELECT monto_requerido FROM projects WHERE id = ?",
+                BigDecimal.class, proyectoId
+            );
+            return monto != null ? monto : BigDecimal.ONE;
+        } catch (Exception e) {
+            return BigDecimal.ONE;
+        }
     }
 }

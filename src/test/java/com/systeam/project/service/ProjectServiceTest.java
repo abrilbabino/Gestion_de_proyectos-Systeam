@@ -11,12 +11,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
@@ -37,13 +40,16 @@ class ProjectServiceTest {
     @Mock
     private TokenizationService tokenizationService;
 
-    @InjectMocks
+    @Mock
+    private JdbcTemplate jdbc;
+
     private ProjectService projectService;
 
     private Proyecto proyectoBase;
 
     @BeforeEach
     void setUp() {
+        projectService = new ProjectService(projectRepository, tokenizationService, jdbc);
         Usuario creador = new Usuario();
         creador.setId(1L);
 
@@ -61,6 +67,9 @@ class ProjectServiceTest {
 
     @Test
     void createProject_debeCrearProyectoConEstadoPreparacion() {
+        lenient().when(jdbc.queryForObject(anyString(), eq(Integer.class), anyString())).thenReturn(0);
+        lenient().when(jdbc.queryForObject(anyString(), eq(String.class), any())).thenReturn("SIM");
+
         CreateProjectRequest request = new CreateProjectRequest();
         request.setTitulo("Nuevo Proyecto");
         request.setSimbolo("NVP");
@@ -85,6 +94,9 @@ class ProjectServiceTest {
 
     @Test
     void createProject_gobernanzaComunitariaDefaultFalse() {
+        lenient().when(jdbc.queryForObject(anyString(), eq(Integer.class), anyString())).thenReturn(0);
+        lenient().when(jdbc.queryForObject(anyString(), eq(String.class), any())).thenReturn("SIM");
+
         CreateProjectRequest request = new CreateProjectRequest();
         request.setTitulo("Titulo");
         request.setSimbolo("TEST");
