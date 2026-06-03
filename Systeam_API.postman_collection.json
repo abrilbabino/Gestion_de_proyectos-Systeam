@@ -1,0 +1,1214 @@
+{
+  "info": {
+    "_postman_id": "systeam-gestion-proyectos-v2",
+    "name": "Systeam API — Gestión de Proyectos",
+    "description": "Batería completa de tests para la API Systeam.\n\nServicios:\n- API Principal: http://localhost:8081\n- Auth Service: http://localhost:8080\n\nFlujo de ejecución:\n1. Ejecutar carpeta '🔧 Setup' completa (crea usuarios de prueba y guarda tokens)\n2. Ejecutar el resto de carpetas en orden\n\nUsuario bootstrap (del seed de BD):\n- email: admin@ideafy.local\n- password: password\n- rol: ADMIN (todos los permisos)\n\nNota: el setup registra un usuario 'plain' sin roles para los tests de 403.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url",        "value": "http://localhost:8081", "type": "string" },
+    { "key": "auth_url",        "value": "http://localhost:8090", "type": "string" },
+    { "key": "token",           "value": "", "type": "string" },
+    { "key": "plain_token",     "value": "", "type": "string" },
+    { "key": "plain_user_id",   "value": "", "type": "string" },
+    { "key": "project_id",      "value": "1",  "type": "string" },
+    { "key": "investment_id",   "value": "1",  "type": "string" },
+    { "key": "dividendo_id",    "value": "1",  "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔧 Setup (ejecutar primero)",
+      "description": "Crea los usuarios de prueba y guarda los tokens en variables de colección. Correr en orden de arriba a abajo.",
+      "item": [
+
+        {
+          "name": "1. Login ADMIN",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{auth_url}}/auth/login",
+              "host": ["{{auth_url}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman.admin@systeam.com\",\n  \"password\": \"PostmanAdmin123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Login ADMIN exitoso — accessToken guardado', function () {",
+                "    const json = pm.response.json();",
+                "    pm.expect(json.accessToken, 'accessToken debe existir').to.be.a('string').and.not.empty;",
+                "    pm.collectionVariables.set('token', json.accessToken);",
+                "    console.log('✅ Token ADMIN guardado');",
+                "    console.log('Roles:', JSON.stringify(json.roles));",
+                "    console.log('Permissions:', JSON.stringify(json.permissions));",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "2. Registrar usuario plain (sin roles)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{auth_url}}/auth/register",
+              "host": ["{{auth_url}}"],
+              "path": ["auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Plain User\",\n  \"email\": \"plainuser@test.systeam\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const code = pm.response.code;",
+                "",
+                "pm.test('Registro exitoso (201) o usuario ya existe (409)', function () {",
+                "    pm.expect([201, 409]).to.include(code);",
+                "});",
+                "",
+                "if (code === 201) {",
+                "    const json = pm.response.json();",
+                "    pm.collectionVariables.set('plain_user_id', String(json.id));",
+                "    console.log('✅ plain_user_id: ' + json.id);",
+                "} else {",
+                "    console.log('Usuario ya existía — continuar con login');",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "3. Login usuario plain",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{auth_url}}/auth/login",
+              "host": ["{{auth_url}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"plainuser@test.systeam\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Token plain user guardado', function () {",
+                "    const json = pm.response.json();",
+                "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                "    pm.collectionVariables.set('plain_token', json.accessToken);",
+                "    console.log('✅ plain_token guardado. Roles:', JSON.stringify(json.roles));",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "📋 Proyectos (/api/projects)",
+      "item": [
+
+        {
+          "name": "[PUBLIC] Catálogo sin auth",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/catalog?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "catalog"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200 — endpoint público (sin token)', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Estructura paginada correcta', function () {",
+                "    pm.expect(json).to.have.property('content');",
+                "    pm.expect(json).to.have.property('totalElements');",
+                "    pm.expect(json).to.have.property('totalPages');",
+                "    pm.expect(json.content).to.be.an('array');",
+                "});",
+                "",
+                "pm.test('Proyectos tienen campos requeridos', function () {",
+                "    if (json.content.length > 0) {",
+                "        const p = json.content[0];",
+                "        pm.expect(p).to.have.all.keys('id', 'titulo', 'estado', 'montoRequerido', 'montoRecaudado', 'creadorId', 'creadoEn');",
+                "        pm.collectionVariables.set('project_id', String(p.id));",
+                "    }",
+                "});",
+                "",
+                "pm.test('Content-Type JSON', () => {",
+                "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[PUBLIC] Catálogo — filtro FINANCIAMIENTO",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/catalog?estado=FINANCIAMIENTO&page=0&size=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "catalog"],
+              "query": [
+                { "key": "estado", "value": "FINANCIAMIENTO" },
+                { "key": "page",   "value": "0" },
+                { "key": "size",   "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Todos los resultados están en FINANCIAMIENTO', function () {",
+                "    pm.response.json().content.forEach(p => {",
+                "        pm.expect(p.estado).to.equal('FINANCIAMIENTO');",
+                "    });",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Listar todos los proyectos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200 con token ADMIN', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Estructura paginada', function () {",
+                "    pm.expect(json).to.have.property('content');",
+                "    pm.expect(json.totalElements).to.be.a('number');",
+                "    pm.expect(json.content).to.be.an('array');",
+                "});",
+                "",
+                "pm.test('Tiempo de respuesta < 2000ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Obtener proyecto por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Proyecto tiene todos los campos', function () {",
+                "    ['id','titulo','descripcion','estado','montoRequerido','montoRecaudado','creadorId','creadoEn','actualizadoEn'].forEach(campo => {",
+                "        pm.expect(json, 'falta campo ' + campo).to.have.property(campo);",
+                "    });",
+                "});",
+                "",
+                "pm.test('ID coincide con el solicitado', () => {",
+                "    pm.expect(String(json.id)).to.equal(pm.collectionVariables.get('project_id'));",
+                "});",
+                "",
+                "pm.test('Estado es un valor válido', function () {",
+                "    const validos = ['PREPARACION','FINANCIAMIENTO','EJECUCION','FINALIZADO','RECHAZADO'];",
+                "    pm.expect(validos).to.include(json.estado);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Obtener proyecto — ID inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/999999",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "999999"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Proyecto inexistente → 404', () => pm.response.to.have.status(404));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Mis proyectos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/my-projects?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "my-projects"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Respuesta paginada', () => pm.expect(pm.response.json()).to.have.property('content'));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Crear proyecto",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Proyecto Test Postman\",\n  \"descripcion\": \"Descripción de prueba generada por batería de tests de Postman. Proyecto de demostración para verificar el endpoint de creación de proyectos en la plataforma Systeam.\",\n  \"montoRequerido\": 50000.00,\n  \"plazo\": \"2027-01-01T00:00:00\",\n  \"gobernanzaComunidad\": false,\n  \"cupoMaximoTokens\": 500,\n  \"valorNominalToken\": 100.00\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 201 Creado', () => pm.response.to.have.status(201));",
+                "",
+                "pm.test('Estado inicial es PREPARACION', () => pm.expect(json.estado).to.equal('PREPARACION'));",
+                "",
+                "pm.test('montoRecaudado empieza en 0', () => pm.expect(json.montoRecaudado).to.equal(0));",
+                "",
+                "pm.test('Tiene ID y timestamps', function () {",
+                "    pm.expect(json).to.have.property('id');",
+                "    pm.expect(json).to.have.property('creadoEn');",
+                "    pm.expect(json).to.have.property('actualizadoEn');",
+                "});",
+                "",
+                "if (pm.response.code === 201) {",
+                "    pm.collectionVariables.set('project_id', String(json.id));",
+                "    console.log('✅ project_id actualizado a ' + json.id);",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Crear proyecto — sin campos requeridos (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Body vacío → 400 Bad Request', () => pm.response.to.have.status(400));",
+                "",
+                "pm.test('Respuesta contiene errores de validación', function () {",
+                "    const json = pm.response.json();",
+                "    pm.expect(Object.keys(json).length).to.be.above(0);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Actualizar proyecto",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Proyecto Test Postman v2\",\n  \"descripcion\": \"Descripción actualizada por test de Postman. Verificando el endpoint PUT.\",\n  \"montoRequerido\": 60000.00,\n  \"plazo\": \"2027-06-01T00:00:00\",\n  \"gobernanzaComunidad\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Campos actualizados correctamente', function () {",
+                "    const json = pm.response.json();",
+                "    pm.expect(json.titulo).to.equal('Proyecto Test Postman v2');",
+                "    pm.expect(json.montoRequerido).to.equal(60000);",
+                "    pm.expect(json.gobernanzaComunidad).to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[ADMIN] Cambiar estado → FINANCIAMIENTO",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/status?status=FINANCIAMIENTO",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "status"],
+              "query": [{ "key": "status", "value": "FINANCIAMIENTO" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Estado actualizado a FINANCIAMIENTO', function () {",
+                "    pm.expect(pm.response.json().estado).to.equal('FINANCIAMIENTO');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Boost proyecto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/boost",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "boost"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[ADMIN] Evaluar estados de proyectos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/evaluate-states",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "evaluate-states"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));",
+                "",
+                "pm.test('Respuesta sin body', () => pm.expect(pm.response.text()).to.be.empty);"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "💰 Inversiones (/api/investments)",
+      "item": [
+
+        {
+          "name": "[PUBLIC] Validar inversión — monto válido",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/investments/validate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments", "validate"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": {{project_id}},\n  \"montoIdea\": 100.00\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200 — no requiere auth', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Tiene todos los campos de validación', function () {",
+                "    ['valido','mensaje','cupoDisponible','precioSubtoken','subTokensARecebir'].forEach(c => {",
+                "        pm.expect(json, 'falta ' + c).to.have.property(c);",
+                "    });",
+                "});",
+                "",
+                "pm.test('valido es boolean', () => pm.expect(json.valido).to.be.a('boolean'));",
+                "",
+                "pm.test('precioSubtoken > 0', () => pm.expect(json.precioSubtoken).to.be.above(0));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[PUBLIC] Validar inversión — monto insuficiente",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/investments/validate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments", "validate"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": {{project_id}},\n  \"montoIdea\": 0.01\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status 200 (pre-check no lanza error HTTP)', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('valido=false cuando monto insuficiente para 1 subtoken', function () {",
+                "    const json = pm.response.json();",
+                "    pm.expect(json.valido).to.be.false;",
+                "    pm.expect(json.subTokensARecebir).to.equal(0);",
+                "    pm.expect(json.mensaje).to.be.a('string').and.not.empty;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Crear inversión",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/investments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": {{project_id}},\n  \"montoIdea\": 500.00,\n  \"txHash\": \"0xpostman_{{$randomUUID}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 201 Creado', () => pm.response.to.have.status(201));",
+                "",
+                "pm.test('Inversión creada correctamente', function () {",
+                "    ['id','usuarioId','proyectoId','proyectoTitulo','montoIdea','subTokensRecibidos','txHash','estado'].forEach(c => {",
+                "        pm.expect(json, 'falta ' + c).to.have.property(c);",
+                "    });",
+                "    pm.expect(json.estado).to.equal('CONFIRMADA');",
+                "});",
+                "",
+                "pm.test('subTokensRecibidos > 0', () => pm.expect(json.subTokensRecibidos).to.be.above(0));",
+                "",
+                "if (pm.response.code === 201) {",
+                "    pm.collectionVariables.set('investment_id', String(json.id));",
+                "    console.log('✅ investment_id actualizado a ' + json.id);",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Crear inversión — txHash duplicado (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/investments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": {{project_id}},\n  \"montoIdea\": 500.00,\n  \"txHash\": \"0xhash_duplicado_fijo_para_test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "// Primera vez crea OK, segunda vez debe dar 400 (txHash duplicado)",
+                "// Correr esta request dos veces seguidas para verificar el 400"
+              ]
+            }
+          },
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('400 en txHash duplicado o 201 en primer intento', function () {",
+                "    pm.expect([201, 400]).to.include(pm.response.code);",
+                "});",
+                "",
+                "if (pm.response.code === 400) {",
+                "    pm.test('Error de negocio tiene campo error', () => {",
+                "        pm.expect(pm.response.json()).to.have.property('error');",
+                "    });",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Obtener inversión por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/investments/{{investment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments", "{{investment_id}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Inversión tiene todos los campos', function () {",
+                "    ['id','usuarioId','proyectoId','proyectoTitulo','proyectoEstado','montoIdea','subTokensRecibidos','txHash','estado','createdAt','updatedAt'].forEach(c => {",
+                "        pm.expect(json, 'falta ' + c).to.have.property(c);",
+                "    });",
+                "});",
+                "",
+                "pm.test('Estado de inversión es válido', () => {",
+                "    pm.expect(['CONFIRMADA','REEMBOLSADA']).to.include(json.estado);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Historial de inversiones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/investments/history?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments", "history"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Historial es paginado', function () {",
+                "    pm.expect(json).to.have.property('content');",
+                "    pm.expect(json).to.have.property('totalElements');",
+                "    pm.expect(json.content).to.be.an('array');",
+                "});",
+                "",
+                "pm.test('Inversiones en historial tienen estado válido', function () {",
+                "    json.content.forEach(inv => {",
+                "        pm.expect(['CONFIRMADA','REEMBOLSADA']).to.include(inv.estado);",
+                "    });",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "💵 Dividendos (/api/dividendos)",
+      "description": "Crear reparto requiere que el proyecto esté en EJECUCION o FINALIZADO.\nSi el proyecto está en FINANCIAMIENTO, el test de crear reparto devolverá 400 — eso es correcto.",
+      "item": [
+
+        {
+          "name": "[ADMIN] Crear reparto de dividendos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dividendos/proyecto/{{project_id}}?monto=5000",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dividendos", "proyecto", "{{project_id}}"],
+              "query": [{ "key": "monto", "value": "5000" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const code = pm.response.code;",
+                "",
+                "pm.test('201 (EJECUCION/FINALIZADO) o 400 (proyecto no está en estado correcto)', function () {",
+                "    pm.expect([201, 400]).to.include(code);",
+                "});",
+                "",
+                "if (code === 201) {",
+                "    const json = pm.response.json();",
+                "    pm.test('Respuesta tiene id y mensaje de éxito', function () {",
+                "        pm.expect(json).to.have.property('id');",
+                "        pm.expect(json.mensaje).to.include('exitosamente');",
+                "    });",
+                "    pm.collectionVariables.set('dividendo_id', String(json.id));",
+                "    console.log('✅ dividendo_id: ' + json.id);",
+                "} else {",
+                "    pm.test('400 tiene campo error', () => pm.expect(pm.response.json()).to.have.property('error'));",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Listar repartos del proyecto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dividendos/proyecto/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dividendos", "proyecto", "{{project_id}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Respuesta es array', () => pm.expect(json).to.be.an('array'));",
+                "",
+                "pm.test('Repartos tienen campos requeridos', function () {",
+                "    if (json.length > 0) {",
+                "        const r = json[0];",
+                "        ['id','proyectoId','montoTotal','montoPorSubtoken','fechaReparto'].forEach(c => {",
+                "            pm.expect(r, 'falta ' + c).to.have.property(c);",
+                "        });",
+                "    }",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Reclamar dividendos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dividendos/{{dividendo_id}}/reclamar",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dividendos", "{{dividendo_id}}", "reclamar"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const code = pm.response.code;",
+                "",
+                "pm.test('200 (reclamado) o 400 (ya reclamado / sin subtokens)', function () {",
+                "    pm.expect([200, 400]).to.include(code);",
+                "});",
+                "",
+                "if (code === 200) {",
+                "    pm.test('Mensaje de éxito', () => pm.expect(pm.response.json().mensaje).to.include('exitosamente'));",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[AUTH] Mis reclamos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dividendos/mis-reclamos",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dividendos", "mis-reclamos"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Respuesta es array', () => pm.expect(json).to.be.an('array'));",
+                "",
+                "pm.test('Reclamos tienen campos requeridos', function () {",
+                "    if (json.length > 0) {",
+                "        const r = json[0];",
+                "        ['id','dividendoId','proyectoId','cantidadSubtokens','montoRecibido','reclamadoEn'].forEach(c => {",
+                "            pm.expect(r, 'falta ' + c).to.have.property(c);",
+                "        });",
+                "    }",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "👛 Wallet (/api/wallet)",
+      "item": [
+        {
+          "name": "[AUTH] Resumen de wallet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/wallet/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "wallet", "summary"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Wallet tiene campos requeridos', function () {",
+                "    ['usuarioId','saldoIdea','portfolio','totalPortfolioValor'].forEach(c => {",
+                "        pm.expect(json, 'falta ' + c).to.have.property(c);",
+                "    });",
+                "});",
+                "",
+                "pm.test('portfolio es array', () => pm.expect(json.portfolio).to.be.an('array'));",
+                "",
+                "pm.test('saldoIdea >= 0', () => pm.expect(json.saldoIdea).to.be.at.least(0));",
+                "",
+                "pm.test('Items del portfolio tienen campos requeridos', function () {",
+                "    json.portfolio.forEach(item => {",
+                "        ['subtokenId','proyectoId','proyectoTitulo','cantidad','precioActual','valorTotal'].forEach(c => {",
+                "            pm.expect(item, 'falta ' + c).to.have.property(c);",
+                "        });",
+                "    });",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+
+    {
+      "name": "📊 Dashboard (/api/dashboard)",
+      "item": [
+        {
+          "name": "[ADMIN] Estadísticas globales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dashboard/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dashboard", "stats"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "",
+                "pm.test('Stats tiene todos los campos', function () {",
+                "    ['totalProyectos','proyectosEnFinanciamiento','proyectosEnEjecucion','proyectosFinalizados','totalInversiones','montoTotalRecaudado','totalUsuarios'].forEach(c => {",
+                "        pm.expect(json, 'falta ' + c).to.have.property(c);",
+                "    });",
+                "});",
+                "",
+                "pm.test('Todos los valores son números >= 0', function () {",
+                "    Object.values(json).forEach(v => pm.expect(v).to.be.a('number').and.at.least(0));",
+                "});",
+                "",
+                "pm.test('totalProyectos >= suma de subestados', function () {",
+                "    const suma = json.proyectosEnFinanciamiento + json.proyectosEnEjecucion + json.proyectosFinalizados;",
+                "    pm.expect(json.totalProyectos).to.be.at.least(suma);",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+
+    {
+      "name": "❌ Escenarios de Error",
+      "description": "Verifica que la seguridad funcione correctamente.\n- Los tests '401' usan el usuario 'plain' (sin roles) o sin token.\n- Los tests '403' usan {{plain_token}} (usuario registrado pero sin permisos).",
+      "item": [
+
+        {
+          "name": "401 — Sin token (GET /api/projects)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Sin token → 401 No autenticado', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "401 — Token inválido",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "eyJhbGciOiJSUzI1NiJ9.token_invalido.firma_invalida", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Token inválido → 401 (auth service rechaza)', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "401 — Sin token (POST /api/investments)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/investments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "investments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"proyectoId\": 1, \"montoIdea\": 100, \"txHash\": \"0xtest\"}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Sin token en inversión → 401', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "403 — Usuario plain intenta GET /api/projects",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{plain_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Usuario sin project:read → 403 Acceso denegado', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "403 — Usuario plain intenta GET /api/dashboard/stats",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{plain_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dashboard/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dashboard", "stats"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Usuario sin ADMIN → 403 en dashboard', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "403 — Usuario plain intenta POST /api/projects/evaluate-states",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{plain_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/evaluate-states",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "evaluate-states"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Usuario sin ADMIN → 403 en evaluate-states', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "403 — Usuario plain intenta POST /api/dividendos (crear reparto)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{plain_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dividendos/proyecto/1?monto=1000",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dividendos", "proyecto", "1"],
+              "query": [{ "key": "monto", "value": "1000" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Usuario sin ADMIN → 403 al crear dividendo', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        }
+
+      ]
+    }
+
+  ]
+}

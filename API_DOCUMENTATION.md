@@ -31,7 +31,7 @@ GET /api/projects/catalog
 
 | Parámetro | Tipo | Default | Descripción |
 |-----------|------|---------|-------------|
-| `status` | string | — | Filtrar por estado (`FINANCIAMIENTO`, `EJECUCION`, etc.) |
+| `estado` | string | — | Filtrar por estado (`FINANCIAMIENTO`, `EJECUCION`, etc.) |
 | `search` | string | — | Buscar en título o descripción |
 | `page` | int | 0 | Página (0-indexed) |
 | `size` | int | 10 | Elementos por página |
@@ -67,7 +67,7 @@ GET /api/projects/catalog
 GET /api/projects?page=0&size=10
 ```
 
-**Autenticación:** No requerida  
+**Autenticación:** Requerida — permiso `project:read`  
 **Response 200:** Mismo formato que catálogo.
 
 ---
@@ -78,14 +78,13 @@ GET /api/projects?page=0&size=10
 GET /api/projects/{id}
 ```
 
-**Autenticación:** No requerida  
+**Autenticación:** Requerida — permiso `project:read`  
 **Response 200:**
 ```json
 {
   "id": 5,
   "titulo": "App de gestión inteligente",
   "descripcion": "Plataforma para...",
-  "objetivo": "Digitalizar la gestión de proyectos...",
   "estado": "FINANCIAMIENTO",
   "montoRequerido": 103875.00,
   "montoRecaudado": 7060.00,
@@ -123,11 +122,23 @@ POST /api/projects
 {
   "titulo": "Mi Proyecto Innovador",
   "descripcion": "Descripción detallada del proyecto...",
-  "objetivo": "Lograr X para Y...",
   "montoRequerido": 10000.00,
-  "plazo": "2026-08-01T00:00:00"
+  "plazo": "2026-08-01T00:00:00",
+  "gobernanzaComunidad": false,
+  "cupoMaximoTokens": 1000,
+  "valorNominalToken": 10.00
 }
 ```
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `titulo` | string | ✅ | Máx. 200 caracteres |
+| `descripcion` | string | ✅ | Máx. 8000 caracteres |
+| `montoRequerido` | decimal | ✅ | Mayor a 0 |
+| `plazo` | datetime | ❌ | Fecha límite de financiamiento |
+| `gobernanzaComunidad` | boolean | ❌ | Si requiere votación comunitaria |
+| `cupoMaximoTokens` | int | ❌ | Mínimo 1 |
+| `valorNominalToken` | decimal | ❌ | Mayor a 0 |
 
 **Response 201:**
 ```json
@@ -135,7 +146,6 @@ POST /api/projects
   "id": 12,
   "titulo": "Mi Proyecto Innovador",
   "descripcion": "Descripción detallada del proyecto...",
-  "objetivo": "Lograr X para Y...",
   "estado": "PREPARACION",
   "montoRequerido": 10000.00,
   "montoRecaudado": 0.00,
@@ -162,9 +172,11 @@ PUT /api/projects/{id}
 {
   "titulo": "Mi Proyecto v2",
   "descripcion": "Nueva descripción...",
-  "objetivo": "Objetivo actualizado...",
   "montoRequerido": 15000.00,
-  "plazo": "2026-09-01T00:00:00"
+  "plazo": "2026-09-01T00:00:00",
+  "gobernanzaComunidad": true,
+  "cupoMaximoTokens": 1500,
+  "valorNominalToken": 10.00
 }
 ```
 
@@ -178,9 +190,9 @@ PUT /api/projects/{id}
 PATCH /api/projects/{id}/status?status=FINANCIAMIENTO
 ```
 
-**Autenticación:** Requerida — permiso `project:update`
+**Autenticación:** Requerida — rol `ADMIN` o permiso `project:update`
 
-**Query param:** `status` — nuevo estado a asignar
+**Query param:** `status` — nuevo estado a asignar (en mayúsculas)
 
 **Transiciones válidas:**
 - `PREPARACION` → `FINANCIAMIENTO`
@@ -198,13 +210,8 @@ PATCH /api/projects/{id}/status?status=FINANCIAMIENTO
 POST /api/projects/{id}/boost
 ```
 
-**Autenticación:** Requerida — rol `ADMIN`  
-**Response 200:**
-```json
-{
-  "mensaje": "Proyecto destacado exitosamente"
-}
-```
+**Autenticación:** Requerida — permiso `project:update`  
+**Response 200:** Sin cuerpo (vacío).
 
 ---
 
@@ -214,15 +221,10 @@ POST /api/projects/{id}/boost
 POST /api/projects/evaluate-states
 ```
 
-**Autenticación:** Requerida  
+**Autenticación:** Requerida — rol `ADMIN`  
 Evalúa todos los proyectos en `FINANCIAMIENTO` cuyo plazo venció y ejecuta devoluciones si no alcanzaron el monto.
 
-**Response 200:**
-```json
-{
-  "mensaje": "Estados evaluados correctamente"
-}
-```
+**Response 204:** Sin cuerpo.
 
 ---
 
@@ -234,7 +236,7 @@ Evalúa todos los proyectos en `FINANCIAMIENTO` cuyo plazo venció y ejecuta dev
 POST /api/investments/validate
 ```
 
-**Autenticación:** Requerida — permiso `investment:read`  
+**Autenticación:** No requerida  
 Verifica si la inversión es posible **sin ejecutarla**.
 
 **Request Body:**
@@ -282,11 +284,15 @@ POST /api/investments
 {
   "proyectoId": 5,
   "montoIdea": 100.00,
-  "txHash": null
+  "txHash": "0xabc123...def456"
 }
 ```
 
-> `txHash` es opcional — si el swap on-chain falla, el sistema lo genera mediante fallback en DB.
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `proyectoId` | long | ✅ | ID del proyecto a invertir |
+| `montoIdea` | decimal | ✅ | Mayor a 0 |
+| `txHash` | string | ✅ | Hash de la transacción blockchain |
 
 **Response 201:**
 ```json
@@ -306,7 +312,7 @@ POST /api/investments
 ```
 
 **Errores posibles:**
-- `409` — Proyecto no en financiamiento / saldo insuficiente / cupo agotado / txHash duplicado
+- `400` — Proyecto no en financiamiento / saldo insuficiente / cupo agotado / txHash duplicado
 
 ---
 
@@ -379,7 +385,7 @@ Solo para proyectos en estado `EJECUCION` o `FINALIZADO`.
 ```
 
 **Errores posibles:**
-- `409` — Proyecto no en EJECUCION/FINALIZADO o sin subtokens colocados
+- `400` — Proyecto no en EJECUCION/FINALIZADO o sin subtokens colocados
 
 ---
 
@@ -424,7 +430,7 @@ El usuario recibe el monto proporcional a sus subtokens. El saldo se acredita en
 ```
 
 **Errores posibles:**
-- `409` — El usuario no tiene subtokens en ese proyecto
+- `400` — El usuario no tiene subtokens en ese proyecto o ya reclamó
 
 ---
 
@@ -534,9 +540,10 @@ GET /api/dashboard/stats
 
 | Rol / Permiso | Acceso |
 |---------------|--------|
-| `ADMIN` | Crear repartos de dividendos, boost de proyectos, dashboard stats |
+| `ADMIN` | Crear repartos de dividendos, evaluar estados, dashboard stats |
 | `project:create` | Crear proyectos |
-| `project:update` | Editar y cambiar estado de proyectos |
+| `project:update` | Editar, cambiar estado y hacer boost de proyectos |
+| `project:read` | Ver proyectos (listar y detalle) |
 | `investment:read` | Ver inversiones, historial, dividendos, wallet |
 | `investment:create` | Crear inversiones |
 
@@ -548,22 +555,28 @@ GET /api/dashboard/stats
 |--------|-------------|
 | `200` | OK |
 | `201` | Creado exitosamente |
-| `400` | Error de validación en el body |
+| `204` | Sin contenido (operación exitosa sin respuesta) |
+| `400` | Error de validación en el body o error de negocio |
 | `401` | No autenticado o token inválido |
 | `403` | Sin permisos suficientes |
 | `404` | Recurso no encontrado |
 | `409` | Conflicto de estado o datos duplicados |
 | `500` | Error interno del servidor |
 
-### Formato de error estándar
+### Formato de error de validación (400)
 
 ```json
 {
-  "timestamp": "2026-05-23T12:00:00",
-  "status": 409,
-  "error": "Conflict",
-  "message": "El proyecto no esta en estado de financiamiento",
-  "path": "/api/investments"
+  "titulo": "El titulo es obligatorio",
+  "montoRequerido": "El monto requerido es obligatorio"
+}
+```
+
+### Formato de error de negocio (400)
+
+```json
+{
+  "error": "El proyecto no está en estado de financiamiento"
 }
 ```
 
@@ -575,3 +588,4 @@ GET /api/dashboard/stats
 - El precio de los subtokens es **dinámico**: sube según oferta/demanda (a más vendidos, más caro) **y** según el rendimiento del proyecto (a más avanzado, más caro). Usar `/api/investments/validate` antes de confirmar para mostrar el precio actualizado.
 - Las devoluciones ante proyecto rechazado son **automáticas**: el scheduler evalúa proyectos con plazo vencido y acredita el `saldo_idea` a cada inversor.
 - El campo `saldo_idea` en el usuario es el balance de tokens IDEA (moneda interna). Se descuenta al invertir y se acredita al reclamar dividendos o recibir reembolsos.
+- `POST /api/projects/evaluate-states` devuelve **204 No Content** (sin body) cuando se ejecuta exitosamente.
