@@ -12,3 +12,4 @@ solc = "0.8.20"
 via-ir = true
 optimizer = true
 optimizer_runs = 200
+libs = ["node_modules", "lib"]

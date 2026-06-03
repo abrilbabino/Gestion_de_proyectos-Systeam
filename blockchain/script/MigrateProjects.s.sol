@@ -59,9 +59,9 @@ contract MigrateProjects is Script {
     function _ensureOffering(OfferingContract offering, uint256 pid, address creator,
         uint256 softCap, uint256 hardCap, uint256 price, uint256 endTime) internal
     {
-        (uint256 pId,,,,,,,,,) = offering.offerings(pid);
+        (uint256 pId,,,,,,,,,,) = offering.offerings(pid);
         if (pId == 0) {
-            offering.registerOffering(pid, creator, softCap, hardCap, price, block.timestamp, endTime);
+            offering.registerOffering(pid, creator, softCap, hardCap, price, price, block.timestamp, endTime);
             console.log("ID %s: Offering registrada (end=%s)", pid, endTime);
         } else {
             console.log("ID %s: Offering ya registrada (pId=%s)", pid, pId);
