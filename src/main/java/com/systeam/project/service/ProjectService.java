@@ -178,7 +178,9 @@ public class ProjectService {
 
         for (Proyecto proyecto : projectsInFinancing) {
             if (proyecto.getPlazo() != null && LocalDateTime.now().isAfter(proyecto.getPlazo())) {
-                updateProjectStatus(proyecto.getId(), "FINALIZADO");
+                boolean fullyFunded = proyecto.getMontoRecaudado() != null
+                    && proyecto.getMontoRecaudado().compareTo(proyecto.getMontoRequerido()) >= 0;
+                updateProjectStatus(proyecto.getId(), fullyFunded ? "EJECUCION" : "FINALIZADO");
             }
         }
     }

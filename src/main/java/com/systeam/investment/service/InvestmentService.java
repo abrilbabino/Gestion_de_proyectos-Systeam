@@ -252,6 +252,13 @@ public class InvestmentService {
         jdbc.update("UPDATE projects SET monto_recaudado = COALESCE(monto_recaudado, 0) + ? WHERE id = ?",
             request.getMontoIdea(), request.getProyectoId());
 
+        BigDecimal nuevoMontoRecaudado = montoRecaudado.add(request.getMontoIdea());
+        if (nuevoMontoRecaudado.compareTo(montoRequerido) >= 0) {
+            jdbc.update("UPDATE projects SET estado = 'EJECUCION', updated_at = NOW() WHERE id = ?",
+                request.getProyectoId());
+            log.info("Project {} reached funding goal. Transitioned to EJECUCION.", request.getProyectoId());
+        }
+
         int nuevoCupo = cupoRestante - subTokens;
         BigDecimal nuevoPrecio = subtokenService.calcularPrecio(
             precioBase, suministroTotal, nuevoCupo, factorVolatilidad, request.getProyectoId()
@@ -331,6 +338,8 @@ public class InvestmentService {
             if (montoRecaudado.compareTo(montoRequerido) < 0) {
                 refundAllInvestors(projectId);
                 jdbc.update("UPDATE projects SET estado = 'RECHAZADO', updated_at = NOW() WHERE id = ?", projectId);
+            } else {
+                jdbc.update("UPDATE projects SET estado = 'EJECUCION', updated_at = NOW() WHERE id = ?", projectId);
             }
         }
     }

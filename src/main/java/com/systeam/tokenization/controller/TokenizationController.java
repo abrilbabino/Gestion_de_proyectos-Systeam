@@ -36,19 +36,19 @@ public class TokenizationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('tokenization:create')")
+    @PreAuthorize("hasAuthority('project:create')")
     public TokenResponse createToken(@RequestBody @Valid CreateTokenRequest request) {
         return tokenizationService.crearToken(request);
     }
 
     @GetMapping("/{proyectoId}")
-    @PreAuthorize("hasAuthority('tokenization:read')")
+    @PreAuthorize("hasAuthority('project:read')")
     public TokenResponse getTokenByProject(@PathVariable Long proyectoId) {
         return tokenizationService.obtenerTokenPorProyecto(proyectoId);
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('tokenization:read')")
+    @PreAuthorize("hasAuthority('project:read')")
     public Page<TokenResponse> listTokens(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {

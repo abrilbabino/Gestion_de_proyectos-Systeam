@@ -39,6 +39,14 @@ public class DividendController {
         return Map.of("id", id, "mensaje", "Reparto de dividendos creado exitosamente");
     }
 
+    @PostMapping("/proyecto/{proyectoId}/oracle")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> crearRepartoDesdeOraculo(@PathVariable Long proyectoId) {
+        Long id = dividendService.crearRepartoDesdeOraculo(proyectoId);
+        return Map.of("id", id, "mensaje", "Reparto creado desde validación del oráculo on-chain");
+    }
+
     @GetMapping("/proyecto/{proyectoId}")
     @PreAuthorize("hasAuthority('investment:read')")
     public List<Map<String, Object>> listarRepartos(@PathVariable Long proyectoId) {

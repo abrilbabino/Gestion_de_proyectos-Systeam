@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.project.exception.ConflictException;
+import com.systeam.project.exception.OracleBillingNotFoundException;
 import com.systeam.project.exception.ResourceNotFoundException;
 
 @Service
@@ -86,6 +87,55 @@ public class DividendService {
                 dividendoId, proyectoId, montoTotal, montoPorSubtoken);
 
         return dividendoId;
+    }
+
+    @Transactional
+    public Long crearRepartoDesdeOraculo(Long proyectoId) {
+        Map<String, Object> billing;
+        try {
+            billing = jdbc.queryForObject(
+                "SELECT monto_facturado, fecha_reporte, oracle_address, tx_hash " +
+                "FROM oracle_billing WHERE proyecto_id = ? ORDER BY fecha_reporte DESC LIMIT 1",
+                (rs, rowNum) -> Map.of(
+                    "montoFacturado", rs.getBigDecimal("monto_facturado"),
+                    "fechaReporte",   rs.getTimestamp("fecha_reporte").toLocalDateTime(),
+                    "oracleAddress",  rs.getString("oracle_address"),
+                    "txHash",         rs.getString("tx_hash")
+                ),
+                proyectoId
+            );
+        } catch (Exception e) {
+            billing = null;
+        }
+
+        if (billing == null) {
+            throw new OracleBillingNotFoundException(
+                "No hay datos del oráculo para el proyecto " + proyectoId +
+                ". La distribución de dividendos está congelada hasta recibir validación on-chain."
+            );
+        }
+
+        BigDecimal dividendBps;
+        try {
+            Integer bps = jdbc.queryForObject(
+                "SELECT dividend_bps FROM subtokens WHERE proyecto_id = ?",
+                Integer.class, proyectoId
+            );
+            dividendBps = bps != null ? BigDecimal.valueOf(bps) : BigDecimal.valueOf(3000);
+        } catch (Exception e) {
+            log.warn("No se pudo obtener dividend_bps para proyecto {}: {}. Usando 30%.", proyectoId, e.getMessage());
+            dividendBps = BigDecimal.valueOf(3000);
+        }
+
+        BigDecimal montoFacturado = (BigDecimal) billing.get("montoFacturado");
+        BigDecimal montoReparto = montoFacturado
+            .multiply(dividendBps)
+            .divide(BigDecimal.valueOf(10000), 4, java.math.RoundingMode.HALF_UP);
+
+        log.info("Reparto oracle: proyecto={}, montoFacturado={}, bps={}, montoReparto={}",
+            proyectoId, montoFacturado, dividendBps, montoReparto);
+
+        return crearReparto(proyectoId, montoReparto);
     }
 
     @Transactional
