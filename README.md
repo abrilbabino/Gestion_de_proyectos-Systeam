@@ -1287,13 +1287,14 @@ Cada inversor llama `refund()` y recupera sus $IDEA.
 
 ```solidity
 // Estructura que define una offering.
-// En Solidity, un struct es como una clase Java con solo atributos (sin métodos).
+// NOTA: Ya no tiene pricePerToken. El precio se calcula dinámicamente
+// en _calculatePrice() según el progreso de recaudación.
 struct Offering {
     uint256 proyectoId;
     address creator;          // Quién recibe los fondos si la ronda es exitosa
     uint256 softCap;          // Mínimo en $IDEA
     uint256 hardCap;          // Máximo en $IDEA
-    uint256 pricePerToken;    // $IDEA por 1 SubToken (en wei, con 18 decimales)
+    uint256 basePrice;        // Precio base de referencia (fijo)
     uint256 startTime;        // Cuándo empieza la venta (timestamp Unix)
     uint256 endTime;          // Cuándo termina (timestamp Unix)
     bool finalized;            // Ya se cerró la ronda?
@@ -1308,14 +1309,14 @@ Porque todos los datos de una offering están relacionados. Tenerlos en un struc
 sea más fácil pasarlos entre funciones y entender el código. Es como tener una clase `Offering`
 en Java con sus campos.
 
-**invest():**
+**invest() (V2 — precio dinámico on-chain):**
+
+El precio ya no se pasa externamente. El contrato lo calcula solo según el progreso:
 
 ```solidity
 function invest(uint256 proyectoId, uint256 ideaAmount) external nonReentrant {
-    // Buscamos la offering en el mapping
     Offering storage off = offerings[proyectoId];
 
-    // Validaciones: existe? no está finalizada? está en el período?
     require(off.proyectoId != 0, "Offering: not registered");
     require(!off.finalized, "Offering: already finalized");
     require(block.timestamp >= off.startTime, "Offering: not started");
@@ -1323,41 +1324,48 @@ function invest(uint256 proyectoId, uint256 ideaAmount) external nonReentrant {
     require(ideaAmount > 0, "Offering: amount > 0");
 
     // No podemos superar el hard cap
-    require(off.totalInvested + ideaAmount <= off.hardCap,
-        "Offering: exceeds hard cap");
+    uint256 newTotal = off.totalInvested + ideaAmount;
+    require(newTotal <= off.hardCap, "Offering: exceeds hard cap");
 
-    // Transferimos $IDEA del inversor a ESTE contrato (OfferingContract)
-    // El inversor tiene que haber llamado approve() antes en IdeaToken
+    // Precio calculado con el progreso ANTES de esta inversión
+    uint256 effectivePrice = _calculatePrice(off.totalInvested, off.softCap, off.basePrice);
+
+    // Calculamos tokens + validamos que sean > 0
+    uint256 tokenAmount = (ideaAmount * 1e18) / effectivePrice;
+    require(tokenAmount > 0, "Offering: tokenAmount must be > 0");
+
     require(idea.transferFrom(msg.sender, address(this), ideaAmount),
         "Offering: IDEA transfer failed");
 
-    // Calculamos cuántos SubTokens le corresponden
-    // pricePerToken = 5 $IDEA → 1 SubToken
-    // Si invierte 100 $IDEA → 100 * 1e18 / 5e18 = 20 SubTokens
-    uint256 tokenAmount = (ideaAmount * 1e18) / off.pricePerToken;
-
-    // Registramos la contribución del inversor
     if (contributions[proyectoId][msg.sender] == 0) {
-        investors[proyectoId].push(msg.sender);  // Primera vez que invierte
+        require(investors[proyectoId].length < MAX_INVESTORS, "Offering: max investors reached");
+        investors[proyectoId].push(msg.sender);
     }
     contributions[proyectoId][msg.sender] += ideaAmount;
-    off.totalInvested += ideaAmount;
+    tokenOwed[proyectoId][msg.sender] += tokenAmount;
+    off.totalInvested = newTotal;
 
-    emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount);
+    emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount, effectivePrice);
 }
 ```
 
-**Cálculo de `tokenAmount`:**
+**Fórmula dinámica `_calculatePrice()`:**
 
 ```solidity
-tokenAmount = (ideaAmount * 1e18) / off.pricePerToken;
+function _calculatePrice(uint256 totalInvested, uint256 softCap, uint256 basePrice) private pure returns (uint256) {
+    if (softCap == 0) return basePrice;
+    uint256 progressBps = (totalInvested * 10000) / softCap;
+    if (progressBps <= 7000) return basePrice;
+    uint256 excessBps = progressBps - 7000;
+    if (excessBps > 3000) excessBps = 3000;
+    uint256 premiumBps = (excessBps * 2000) / 3000;
+    return basePrice + (basePrice * premiumBps / 10000);
+}
 ```
 
-- `ideaAmount` está en wei (18 decimales). Si invierte 100 $IDEA = 100 * 10^18 wei.
-- `pricePerToken` está en wei. Si 1 SubToken cuesta 5 $IDEA = 5 * 10^18 wei.
-- `tokenAmount = (100e18 * 1e18) / 5e18 = 20e18` = 20 SubTokens.
-
-El `* 1e18` extra es para mantener la precisión de 18 decimales.
+- Progreso ≤ 70% → precio = basePrice (sin cambios)
+- Progreso > 70% → precio sube linealmente hasta +20% máximo
+- El precio se calcula sobre el progreso ANTES de la inversión actual
 
 **finalize():**
 
@@ -1392,7 +1400,9 @@ los inversores recuperan su plata. Si la ronda es exitosa, recién ahí el cread
 Esto protege al inversor: **nunca le estás dando plata al creador hasta que se cumpla la condición**
 de que haya suficiente capital.
 
-**claimTokens():**
+**claimTokens() (V2):**
+
+Usa `tokenOwed` en vez de recalcular. Cada inversión guardó los tokens exactos al precio vigente:
 
 ```solidity
 function claimTokens(uint256 proyectoId) external nonReentrant {
@@ -1400,19 +1410,15 @@ function claimTokens(uint256 proyectoId) external nonReentrant {
     require(off.finalized, "Offering: not finalized");
     require(off.success, "Offering: not successful, use refund()");
 
-    uint256 contributed = contributions[proyectoId][msg.sender];
-    require(contributed > 0, "Offering: nothing to claim");
+    uint256 tokens = tokenOwed[proyectoId][msg.sender];
+    require(tokens > 0, "Offering: nothing to claim");
 
-    // Marcamos como reclamado (para que no pueda reclamar dos veces)
+    tokenOwed[proyectoId][msg.sender] = 0;
     contributions[proyectoId][msg.sender] = 0;
 
-    // Calculamos cuántos SubTokens le tocan
-    uint256 tokenAmount = (contributed * 1e18) / off.pricePerToken;
+    factory.allocateTokens(proyectoId, msg.sender, tokens);
 
-    // La factory transfiere los SubTokens al inversor
-    factory.allocateTokens(proyectoId, msg.sender, tokenAmount);
-
-    emit TokensClaimed(proyectoId, msg.sender, tokenAmount);
+    emit TokensClaimed(proyectoId, msg.sender, tokens);
 }
 ```
 

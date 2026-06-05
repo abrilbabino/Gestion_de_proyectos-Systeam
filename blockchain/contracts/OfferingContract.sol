@@ -13,12 +13,14 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     IERC20 public immutable idea;
     IdeafyFactory public immutable factory;
 
+    uint256 public constant MAX_INVESTORS = 500;
+    uint256 public constant GRACE_PERIOD = 30 days;
+
     struct Offering {
         uint256 proyectoId;
         address creator;
         uint256 softCap;
         uint256 hardCap;
-        uint256 pricePerToken;
         uint256 basePrice;
         uint256 startTime;
         uint256 endTime;
@@ -32,8 +34,8 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) public tokenOwed;
     mapping(uint256 => address[]) public investors;
 
-    event OfferingRegistered(uint256 indexed proyectoId, uint256 softCap, uint256 hardCap, uint256 pricePerToken);
-    event InvestmentMade(uint256 indexed proyectoId, address indexed investor, uint256 ideaAmount, uint256 tokenAmount);
+    event OfferingRegistered(uint256 indexed proyectoId, uint256 softCap, uint256 hardCap, uint256 basePrice);
+    event InvestmentMade(uint256 indexed proyectoId, address indexed investor, uint256 ideaAmount, uint256 tokenAmount, uint256 price);
     event OfferingFinalized(uint256 indexed proyectoId, bool success);
     event TokensClaimed(uint256 indexed proyectoId, address indexed investor, uint256 amount);
     event RefundMade(uint256 indexed proyectoId, address indexed investor, uint256 amount);
@@ -52,7 +54,6 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         address creator,
         uint256 softCap,
         uint256 hardCap,
-        uint256 pricePerToken,
         uint256 basePrice,
         uint256 startTime,
         uint256 endTime
@@ -60,8 +61,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(offerings[proyectoId].proyectoId == 0, "Offering: already registered");
         require(softCap > 0, "Offering: softCap > 0");
         require(hardCap >= softCap, "Offering: hardCap >= softCap");
-        require(pricePerToken > 0, "Offering: pricePerToken > 0");
-        require(basePrice > 0 && basePrice <= pricePerToken, "Offering: 0 < basePrice <= pricePerToken");
+        require(basePrice > 0, "Offering: basePrice > 0");
         require(startTime < endTime, "Offering: startTime < endTime");
         require(endTime > block.timestamp, "Offering: endTime in future");
         require(creator != address(0), "Offering: invalid creator");
@@ -73,7 +73,6 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
             creator: creator,
             softCap: softCap,
             hardCap: hardCap,
-            pricePerToken: pricePerToken,
             basePrice: basePrice,
             startTime: startTime,
             endTime: endTime,
@@ -82,19 +81,33 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
             totalInvested: 0
         });
 
-        emit OfferingRegistered(proyectoId, softCap, hardCap, pricePerToken);
+        emit OfferingRegistered(proyectoId, softCap, hardCap, basePrice);
     }
 
-    function updatePricePerToken(uint256 proyectoId, uint256 newPrice) external onlyRole(ADMIN_ROLE) {
+    /// @notice Calcula el precio dinámico según el progreso de recaudación
+    ///         Progreso <= 70%: precio = basePrice
+    ///         Progreso > 70%: precio sube linealmente hasta max +20% al 100%
+    function getCurrentPrice(uint256 proyectoId) public view returns (uint256) {
         Offering storage off = offerings[proyectoId];
         require(off.proyectoId != 0, "Offering: not registered");
-        require(!off.finalized, "Offering: already finalized");
-        require(block.timestamp >= off.startTime, "Offering: not started");
-        require(block.timestamp <= off.endTime, "Offering: ended");
-        require(newPrice >= off.basePrice, "Offering: price below basePrice");
-        require(newPrice <= off.basePrice * 120 / 100, "Offering: price exceeds +20% max");
+        return _calculatePrice(off.totalInvested, off.softCap, off.basePrice);
+    }
 
-        off.pricePerToken = newPrice;
+    function _calculatePrice(uint256 totalInvested, uint256 softCap, uint256 basePrice) private pure returns (uint256) {
+        if (softCap == 0) return basePrice;
+
+        uint256 progressBps = (totalInvested * 10000) / softCap;
+
+        if (progressBps <= 7000) {
+            return basePrice;
+        }
+
+        uint256 excessBps = progressBps - 7000;
+        if (excessBps > 3000) excessBps = 3000;
+
+        uint256 premiumBps = (excessBps * 2000) / 3000;
+
+        return basePrice + (basePrice * premiumBps / 10000);
     }
 
     function invest(uint256 proyectoId, uint256 ideaAmount) external nonReentrant {
@@ -104,25 +117,41 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(block.timestamp >= off.startTime, "Offering: not started");
         require(block.timestamp <= off.endTime, "Offering: ended");
         require(ideaAmount > 0, "Offering: amount > 0");
-        require(off.totalInvested + ideaAmount <= off.hardCap,
-            "Offering: exceeds hard cap");
+
+        uint256 newTotal = off.totalInvested + ideaAmount;
+        require(newTotal <= off.hardCap, "Offering: exceeds hard cap");
+
+        uint256 effectivePrice = _calculatePrice(off.totalInvested, off.softCap, off.basePrice);
+
+        uint256 tokenAmount = (ideaAmount * 1e18) / effectivePrice;
+        require(tokenAmount > 0, "Offering: tokenAmount must be > 0");
 
         require(idea.transferFrom(msg.sender, address(this), ideaAmount),
             "Offering: IDEA transfer failed");
 
-        uint256 tokenAmount = (ideaAmount * 1e18) / off.pricePerToken;
-
         if (contributions[proyectoId][msg.sender] == 0) {
+            require(investors[proyectoId].length < MAX_INVESTORS,
+                "Offering: max investors reached");
             investors[proyectoId].push(msg.sender);
         }
         contributions[proyectoId][msg.sender] += ideaAmount;
         tokenOwed[proyectoId][msg.sender] += tokenAmount;
-        off.totalInvested += ideaAmount;
+        off.totalInvested = newTotal;
 
-        emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount);
+        emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount, effectivePrice);
     }
 
     function finalize(uint256 proyectoId) external onlyRole(ADMIN_ROLE) {
+        _finalize(proyectoId, msg.sender);
+    }
+
+    function emergencyFinalize(uint256 proyectoId) external nonReentrant {
+        require(block.timestamp > offerings[proyectoId].endTime + GRACE_PERIOD,
+            "Offering: grace period not elapsed");
+        _finalize(proyectoId, msg.sender);
+    }
+
+    function _finalize(uint256 proyectoId, address caller) private {
         Offering storage off = offerings[proyectoId];
         require(off.proyectoId != 0, "Offering: not registered");
         require(!off.finalized, "Offering: already finalized");
