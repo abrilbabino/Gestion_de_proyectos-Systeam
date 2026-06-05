@@ -28,9 +28,12 @@ public class WalletService {
         List<PortfolioItem> portfolio = new ArrayList<>();
         for (Object[] row : rows) {
             portfolio.add(PortfolioItem.builder()
-                    .subtoken((String) row[0])
-                    .cantidad((Integer) row[1])
-                    .precioActual((BigDecimal) row[2])
+                    .subtokenId((Long) row[0])
+                    .proyectoNombre((String) row[1])
+                    .subtokenNombre((String) row[2])
+                    .subtokenSimbolo((String) row[3])
+                    .cantidad((Integer) row[4])
+                    .precioActual((BigDecimal) row[5])
                     .build());
         }
 

@@ -22,7 +22,10 @@ public class WalletSummaryResponse {
     @Data
     @Builder
     public static class PortfolioItem {
-        private String subtoken;
+        private Long subtokenId;
+        private String proyectoNombre;
+        private String subtokenNombre;
+        private String subtokenSimbolo;
         private Integer cantidad;
         private BigDecimal precioActual;
     }

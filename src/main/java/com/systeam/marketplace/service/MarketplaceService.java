@@ -116,6 +116,12 @@ public class MarketplaceService {
         Map<String, Object> buyer = findUserOrThrow(buyerId);
         BigDecimal buyerBalance = (BigDecimal) buyer.get("saldo_idea");
         BigDecimal totalPriceBD = new BigDecimal(totalPrice);
+        
+        // Convert from Wei to normal IDEA token units if stored in Wei
+        if (totalPriceBD.compareTo(new BigDecimal("1000000000")) >= 0) {
+            totalPriceBD = totalPriceBD.divide(new BigDecimal("1000000000000000000"), 4, java.math.RoundingMode.HALF_UP);
+        }
+
         if (buyerBalance.compareTo(totalPriceBD) < 0) {
             throw new ConflictException("Saldo insuficiente de tokens IDEA");
         }
@@ -174,7 +180,7 @@ public class MarketplaceService {
         int total = jdbc.queryForObject(countSql, Integer.class);
 
         String sql = """
-            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.nombre AS seller_name,
+            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.name AS seller_name,
                    ob.subtoken_id, p.titulo AS project_name,
                    ob.cantidad, ob.cantidad_inicial, ob.precio_unitario,
                    (ob.cantidad * ob.precio_unitario) AS precio_total,
@@ -197,7 +203,7 @@ public class MarketplaceService {
 
     public ListingResponse getListingById(Long id) {
         String sql = """
-            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.nombre AS seller_name,
+            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.name AS seller_name,
                    ob.subtoken_id, p.titulo AS project_name,
                    ob.cantidad, ob.cantidad_inicial, ob.precio_unitario,
                    (ob.cantidad * ob.precio_unitario) AS precio_total,
@@ -217,7 +223,7 @@ public class MarketplaceService {
 
     public List<ListingResponse> listListingsBySubtoken(Long subtokenId) {
         String sql = """
-            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.nombre AS seller_name,
+            SELECT ob.id, ob.on_chain_id, ob.seller_id, u.name AS seller_name,
                    ob.subtoken_id, p.titulo AS project_name,
                    ob.cantidad, ob.cantidad_inicial, ob.precio_unitario,
                    (ob.cantidad * ob.precio_unitario) AS precio_total,
@@ -234,7 +240,7 @@ public class MarketplaceService {
 
     private Map<String, Object> findUserOrThrow(Long userId) {
         List<Map<String, Object>> rows = jdbc.query(
-            "SELECT id, nombre, saldo_idea FROM users WHERE id = ?",
+            "SELECT id, name AS nombre, saldo_idea FROM users WHERE id = ?",
             (rs, rn) -> Map.of("id", rs.getLong("id"), "nombre", rs.getString("nombre"),
                 "saldo_idea", rs.getBigDecimal("saldo_idea")),
             userId);
@@ -259,8 +265,8 @@ public class MarketplaceService {
                 "id", rs.getLong("id"),
                 "seller_id", rs.getLong("seller_id"),
                 "subtoken_id", rs.getLong("subtoken_id"),
-                "cantidad", BigInteger.valueOf(rs.getLong("cantidad")),
-                "precio_unitario", BigInteger.valueOf(rs.getLong("precio_unitario")),
+                "cantidad", rs.getBigDecimal("cantidad").toBigInteger(),
+                "precio_unitario", rs.getBigDecimal("precio_unitario").toBigInteger(),
                 "estado", rs.getString("estado")),
             listingId);
         if (rows.isEmpty()) throw new ResourceNotFoundException("Orden no encontrada");
@@ -278,10 +284,10 @@ public class MarketplaceService {
             r.setSellerName(rs.getString("seller_name"));
             r.setSubtokenId(rs.getLong("subtoken_id"));
             r.setProjectName(rs.getString("project_name"));
-            r.setCantidad(BigInteger.valueOf(rs.getLong("cantidad")));
-            r.setCantidadInicial(BigInteger.valueOf(rs.getLong("cantidad_inicial")));
-            r.setPrecioUnitario(BigInteger.valueOf(rs.getLong("precio_unitario")));
-            r.setPrecioTotal(BigInteger.valueOf(rs.getLong("precio_total")));
+            r.setCantidad(rs.getBigDecimal("cantidad").toBigInteger());
+            r.setCantidadInicial(rs.getBigDecimal("cantidad_inicial").toBigInteger());
+            r.setPrecioUnitario(rs.getBigDecimal("precio_unitario").toBigInteger());
+            r.setPrecioTotal(rs.getBigDecimal("precio_total").toBigInteger());
             r.setEstado(rs.getString("estado"));
             r.setTxHash(rs.getString("tx_hash"));
             Timestamp ts = rs.getTimestamp("created_at");

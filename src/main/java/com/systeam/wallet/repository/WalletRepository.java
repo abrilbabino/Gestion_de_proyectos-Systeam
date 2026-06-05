@@ -31,12 +31,16 @@ public class WalletRepository {
 
     public List<Object[]> findPortfolio(Long userId) {
         return jdbc.query(
-            "SELECT s.nombre, pa.cantidad, s.precio_actual " +
+            "SELECT s.id AS subtoken_id, p.titulo AS proyecto_nombre, s.nombre AS subtoken_nombre, s.simbolo AS subtoken_simbolo, pa.cantidad, s.precio_actual " +
             "FROM portfolio_activos pa " +
             "JOIN subtokens s ON pa.subtoken_id = s.id " +
+            "JOIN projects p ON s.proyecto_id = p.id " +
             "WHERE pa.usuario_id = ?",
             (rs, rowNum) -> new Object[]{
-                rs.getString("nombre"),
+                rs.getLong("subtoken_id"),
+                rs.getString("proyecto_nombre"),
+                rs.getString("subtoken_nombre"),
+                rs.getString("subtoken_simbolo"),
                 rs.getInt("cantidad"),
                 rs.getBigDecimal("precio_actual")
             },
