@@ -275,7 +275,7 @@ public class TokenizationService {
 
             offeringContractService.registerOffering(
                 BigInteger.valueOf(proyectoId), creator,
-                softCap, hardCap, pricePerToken, pricePerToken, startTime, endTime
+                softCap, hardCap, pricePerToken, startTime, endTime
             );
             log.info("Offering registrada para proyecto {}: softCap={}, price={}, endTime={}",
                 proyectoId, softCap, pricePerToken, endTime);

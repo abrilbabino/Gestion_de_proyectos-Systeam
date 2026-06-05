@@ -48,3 +48,9 @@ blockchain/broadcast/
 node_modules/
 package-lock.json
 package.json
+
+# Repositorios externos
+repo_data_model/
+repo_user_service/
+token_frontend/
+db/

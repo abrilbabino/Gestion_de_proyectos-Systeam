@@ -191,19 +191,6 @@ public class InvestmentService {
                 .multiply(new BigDecimal("1000000000000000000"))
                 .toBigInteger();
 
-            // Actualizar precio dinámico en el contrato antes de invertir
-            BigInteger precioWei = precioSubtoken
-                .multiply(new BigDecimal("1000000000000000000"))
-                .toBigInteger();
-            try {
-                offeringContractService.updatePricePerToken(
-                    BigInteger.valueOf(request.getProyectoId()), precioWei
-                );
-                log.debug("PricePerToken actualizado en contrato a {}", precioSubtoken);
-            } catch (Exception eUpdate) {
-                log.warn("No se pudo actualizar pricePerToken en contrato: {}", eUpdate.getMessage());
-            }
-
             txHash = offeringContractService.invest(
                 BigInteger.valueOf(request.getProyectoId()),
                 montoIdeaWei
