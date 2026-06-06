@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +26,7 @@ import java.util.Set;
 @Component
 public class GatewayHeaderFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(GatewayHeaderFilter.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -32,9 +35,13 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String userId = request.getHeader("X-User-Id");
+        String authHeader = request.getHeader("Authorization");
+
+        log.info("GatewayHeaderFilter: path={}, X-User-Id={}, Authorization={}",
+            request.getRequestURI(), userId, authHeader != null ? "Bearer present" : "none");
 
         if (userId != null) {
-            // Production path: trust gateway headers
+            log.info("Using X-User-Id header path");
             authenticateFromHeaders(userId,
                     request.getHeader("X-User-Email"),
                     request.getHeader("X-User-Roles"),
@@ -44,8 +51,8 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
         }
 
         // Local dev path: no gateway, read JWT directly
-        String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            log.info("Using JWT Bearer path");
             tryAuthenticateFromJwt(authHeader.substring(7));
         }
 
@@ -112,8 +119,9 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(
                     new UsernamePasswordAuthenticationToken(principal, null, authorities));
 
-        } catch (Exception ignored) {
-            // Malformed token — security context stays empty, will return 401
+        } catch (Exception e) {
+            log.error("JWT authentication failed: {}", e.getMessage());
+            e.printStackTrace();
         }
     }
 }
