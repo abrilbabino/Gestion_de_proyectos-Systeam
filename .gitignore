@@ -36,6 +36,8 @@ build/
 .vscode/
 
 .env
+.env.*
+!.env.example
 /docs
 
 # Blockchain

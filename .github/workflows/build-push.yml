@@ -1,0 +1,57 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: project-1944cf83-7f15-4f33-89b
+  REGION: us-central1
+  REPO_NAME: systeam-repo
+  IMAGE_NAME: projects-api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --build-arg GITHUB_USERNAME=${{ secrets.GH_USERNAME }} \
+            --build-arg GITHUB_TOKEN=${{ secrets.GH_PAT }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest \
+            .
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest
+
+      # Opcional: Actualizar repo de infraestructura para desencadenar ArgoCD
+      - name: Update Infra Repository
+        uses: actions/github-script@v6
+        env:
+          PAT: ${{ secrets.PAT_INFRA_REPO }}
+        with:
+          script: |
+            // Aquí iría el script para hacer un commit automático en el repo Ideafy
+            console.log("Imagen subida. Hash:", context.sha);
