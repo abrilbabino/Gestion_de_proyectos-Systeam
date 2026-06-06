@@ -28,5 +28,8 @@ jobs:
           workload_identity_provider: 'projects/889190443263/locations/global/workloadIdentityPools/gh-pool-tofu/providers/gh-provider-tofu'
           service_account: 'tofu-runner@project-1944cf83-7f15-4f33-89b.iam.gserviceaccount.com'
 
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
       - name: Upload to GCS
         run: gsutil cp backup.sql gs://systeam/backups/backup-$(date +%Y%m%d).sql
