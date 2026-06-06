@@ -190,12 +190,14 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
     }
 
-    private boolean isValidTransition(String from, String to) {
+    // Package-visible for AuditService use
+    boolean isValidTransition(String from, String to) {
         return switch (from) {
-            case "PREPARACION" -> "FINANCIAMIENTO".equals(to) || "CANCELADO".equals(to);
+            case "PREPARACION"   -> "EN_AUDITORIA".equals(to) || "CANCELADO".equals(to);
+            case "EN_AUDITORIA"  -> "FINANCIAMIENTO".equals(to) || "RECHAZADO".equals(to) || "CANCELADO".equals(to);
             case "FINANCIAMIENTO" -> "EJECUCION".equals(to) || "FINALIZADO".equals(to) || "CANCELADO".equals(to);
-            case "EJECUCION" -> "FINALIZADO".equals(to);
-            default -> false;
+            case "EJECUCION"     -> "FINALIZADO".equals(to);
+            default              -> false;  // RECHAZADO, CANCELADO, FINALIZADO are terminal
         };
     }
 
