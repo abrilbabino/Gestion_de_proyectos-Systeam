@@ -152,8 +152,67 @@ class ProjectServiceTest {
                 .hasMessageContaining("99");
     }
 
+    // FSM Regression: PREPARACION -> EN_AUDITORIA is now the only valid forward path from PREPARACION
+    @Test
+    void updateProjectStatus_transicionValidaPreparacionAEnAuditoria() {
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
+        when(projectRepository.save(any(Proyecto.class))).thenReturn(proyectoBase);
+
+        projectService.updateProjectStatus(1L, "EN_AUDITORIA");
+
+        verify(projectRepository).save(any(Proyecto.class));
+    }
+
+    // FSM Regression: PREPARACION -> FINANCIAMIENTO is now INVALID (breaking change from HU-44)
+    @Test
+    void updateProjectStatus_transicionPreparacionAFinanciamientoAhoraInvalida() {
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
+
+        assertThatThrownBy(() -> projectService.updateProjectStatus(1L, "FINANCIAMIENTO"))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("invalida");
+    }
+
+    @Test
+    void updateProjectStatus_transicionEnAuditoriaAFinanciamiento() {
+        proyectoBase.setEstado("EN_AUDITORIA");
+        proyectoBase.setCupoMaximoTokens(1000);
+        proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
+
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
+        when(projectRepository.save(any(Proyecto.class))).thenReturn(proyectoBase);
+
+        projectService.updateProjectStatus(1L, "FINANCIAMIENTO");
+
+        verify(projectRepository).save(any(Proyecto.class));
+    }
+
+    @Test
+    void updateProjectStatus_transicionEnAuditoriaARechaazado() {
+        proyectoBase.setEstado("EN_AUDITORIA");
+
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
+        when(projectRepository.save(any(Proyecto.class))).thenReturn(proyectoBase);
+
+        projectService.updateProjectStatus(1L, "RECHAZADO");
+
+        verify(projectRepository).save(any(Proyecto.class));
+    }
+
+    @Test
+    void updateProjectStatus_rechazadoEsTerminal_noPudeTransicionar() {
+        proyectoBase.setEstado("RECHAZADO");
+
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
+
+        assertThatThrownBy(() -> projectService.updateProjectStatus(1L, "PREPARACION"))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("invalida");
+    }
+
     @Test
     void updateProjectStatus_transicionValidaPreparacionAFinanciamiento() throws Exception {
+        proyectoBase.setEstado("EN_AUDITORIA");
         proyectoBase.setCupoMaximoTokens(1000);
         proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
 
@@ -205,6 +264,8 @@ class ProjectServiceTest {
 
     @Test
     void updateProjectStatus_financiamiento_asignaPlazoSiNoTiene() throws Exception {
+        // Must come from EN_AUDITORIA now (PREPARACION->FINANCIAMIENTO is no longer valid per HU-44)
+        proyectoBase.setEstado("EN_AUDITORIA");
         proyectoBase.setCupoMaximoTokens(1000);
         proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
 

@@ -1,6 +1,7 @@
 package com.systeam.project.exception;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
@@ -55,5 +56,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidStateTransition(InvalidStateTransitionException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "INVALID_STATE_TRANSITION");
+        body.put("message", ex.getMessage());
+        body.put("status", 409);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 }
