@@ -239,12 +239,12 @@
 											<limits>
 												<limit>
 													<counter>INSTRUCTION</counter>
-													<value>COVERED_RATIO</value>
+													<value>COVEREDRATIO</value>
 													<minimum>0.60</minimum>
 												</limit>
 												<limit>
 													<counter>BRANCH</counter>
-													<value>COVERED_RATIO</value>
+													<value>COVEREDRATIO</value>
 													<minimum>0.50</minimum>
 												</limit>
 											</limits>
