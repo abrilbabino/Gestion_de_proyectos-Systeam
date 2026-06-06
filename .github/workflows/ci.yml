@@ -6,24 +6,25 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'
+
 jobs:
 
-  # ─────────────────────────────────────────
-  # JOB 1: Compilar y correr tests unitarios
-  # ─────────────────────────────────────────
   test:
-    name: Tests unitarios
+    name: Tests + Cobertura
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout codigo
         uses: actions/checkout@v4
 
-      - name: Configurar JDK 21
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
 
       - name: Configurar credenciales GitHub Packages
         run: |
@@ -47,19 +48,80 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Correr tests
-        run: mvn test
+      - name: Instalar shared-model local
+        run: |
+          mvn install:install-file \
+            -Dfile=shared-model-local.jar \
+            -DgroupId=com.systeam \
+            -DartifactId=shared-model \
+            -Dversion=0.0.1-SNAPSHOT \
+            -Dpackaging=jar \
+            -q
 
-      - name: Publicar reporte de tests
+      - name: Compilar y correr tests con cobertura
+        run: mvn clean verify
+
+      - name: Publicar reporte de tests (surefire)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: target/surefire-reports/
 
-  # ─────────────────────────────────────────────────────────
-  # JOB 2: Build Docker y push (solo en push a main)
-  # ─────────────────────────────────────────────────────────
+      - name: Publicar reporte de cobertura (JaCoCo)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/
+
+      - name: Verificar cobertura minima
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: mvn verify -Pcoverage-check -q
+
+  docker-build-check:
+    name: Verify Docker build
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache de dependencias Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Compilar JAR
+        run: mvn clean package -DskipTests -q
+        env:
+          PACKAGES_USERNAME: ${{ secrets.PACKAGES_USERNAME }}
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker (sin push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          tags: systeam/gestion-proyectos:pr-check
+          build-args: |
+            GITHUB_USERNAME=${{ secrets.PACKAGES_USERNAME }}
+            GITHUB_TOKEN=${{ secrets.PACKAGES_TOKEN }}
+
   build-and-push:
     name: Build y Push Docker
     runs-on: ubuntu-latest
@@ -70,26 +132,11 @@ jobs:
       - name: Checkout codigo
         uses: actions/checkout@v4
 
-      - name: Configurar JDK 21
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Configurar credenciales GitHub Packages
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml <<EOF
-          <settings>
-            <servers>
-              <server>
-                <id>github</id>
-                <username>${{ secrets.PACKAGES_USERNAME }}</username>
-                <password>${{ secrets.PACKAGES_TOKEN }}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
 
       - name: Cache de dependencias Maven
         uses: actions/cache@v4
@@ -99,7 +146,10 @@ jobs:
           restore-keys: ${{ runner.os }}-maven-
 
       - name: Compilar JAR
-        run: mvn clean package -DskipTests
+        run: mvn clean package -DskipTests -q
+        env:
+          PACKAGES_USERNAME: ${{ secrets.PACKAGES_USERNAME }}
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -116,4 +166,37 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ulisescasal/gestion-proyectos:latest
+          tags: |
+            ulisescasal/gestion-proyectos:latest
+            ulisescasal/gestion-proyectos:${{ github.sha }}
+          build-args: |
+            GITHUB_USERNAME=${{ secrets.PACKAGES_USERNAME }}
+            GITHUB_TOKEN=${{ secrets.PACKAGES_TOKEN }}
+
+  security-scan:
+    name: Escaneo de seguridad
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Correr Trivy sobre el codigo
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+      - name: Escanear imagen Docker con Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ulisescasal/gestion-proyectos:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH

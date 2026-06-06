@@ -39,11 +39,17 @@ public class OracleBillingService {
     private final BlockchainProperties props;
     private final JdbcTemplate jdbc;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public OracleBillingService(Web3j web3j, Credentials credentials,
                                  BlockchainProperties props, JdbcTemplate jdbc) {
+        this(web3j, credentials, new RawTransactionManager(web3j, credentials), props, jdbc);
+    }
+
+    OracleBillingService(Web3j web3j, Credentials credentials, TransactionManager txManager,
+                          BlockchainProperties props, JdbcTemplate jdbc) {
         this.web3j = web3j;
         this.credentials = credentials;
-        this.txManager = new RawTransactionManager(web3j, credentials);
+        this.txManager = txManager;
         this.props = props;
         this.jdbc = jdbc;
     }

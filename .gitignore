@@ -39,6 +39,7 @@ build/
 .env.*
 !.env.example
 /docs
+/DOCS_TESTING
 
 # Blockchain
 blockchain/node_modules/

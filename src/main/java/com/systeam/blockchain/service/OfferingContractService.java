@@ -33,10 +33,18 @@ public class OfferingContractService {
     private final TransactionManager txManager;
     private final BlockchainProperties props;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public OfferingContractService(Web3j web3j, Credentials credentials, BlockchainProperties props) {
+        this(web3j, credentials, new RawTransactionManager(web3j, credentials), props);
+    }
+
+    // Constructor visible a nivel paquete para tests.
+    // Permite inyectar un TransactionManager mockeado en lugar de RawTransactionManager real,
+    // evitando que Web3j verifique el hash de la transacción (TxHashMismatchException).
+    OfferingContractService(Web3j web3j, Credentials credentials, TransactionManager txManager, BlockchainProperties props) {
         this.web3j = web3j;
         this.credentials = credentials;
-        this.txManager = new RawTransactionManager(web3j, credentials);
+        this.txManager = txManager;
         this.props = props;
     }
 
