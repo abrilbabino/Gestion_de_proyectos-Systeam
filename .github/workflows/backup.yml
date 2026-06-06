@@ -1,0 +1,32 @@
+name: Backup Database
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Se ejecuta todos los días a las 3:00 AM
+  workflow_dispatch: # Permite dispararlo manualmente desde la web de GitHub
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write' # Necesario para la federación de identidades
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Run Backup
+        run: supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" -f backup.sql
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: 'projects/889190443263/locations/global/workloadIdentityPools/gh-pool-tofu/providers/gh-provider-tofu'
+          service_account: 'tofu-runner@project-1944cf83-7f15-4f33-89b.iam.gserviceaccount.com'
+
+      - name: Upload to GCS
+        run: gsutil cp backup.sql gs://systeam/backups/backup-$(date +%Y%m%d).sql
