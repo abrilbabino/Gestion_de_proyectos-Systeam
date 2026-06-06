@@ -37,6 +37,7 @@ build/
 
 .env
 /docs
+/DOCS_TESTING
 
 # Blockchain
 blockchain/node_modules/

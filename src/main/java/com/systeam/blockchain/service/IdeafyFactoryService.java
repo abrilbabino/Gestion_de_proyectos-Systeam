@@ -29,7 +29,7 @@ import com.systeam.config.BlockchainProperties;
 public class IdeafyFactoryService {
 
     private static final Logger log = LoggerFactory.getLogger(IdeafyFactoryService.class);
-    private static final String PROJECT_LAUNCHED_TOPIC = Hash.sha3String(
+    static final String PROJECT_LAUNCHED_TOPIC = Hash.sha3String(
         "ProjectLaunched(uint256,address,address,uint256,uint256,uint256)"
     );
 
@@ -38,10 +38,16 @@ public class IdeafyFactoryService {
     private final TransactionManager txManager;
     private final BlockchainProperties props;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public IdeafyFactoryService(Web3j web3j, Credentials credentials, BlockchainProperties props) {
+        this(web3j, credentials, new RawTransactionManager(web3j, credentials), props);
+    }
+
+    IdeafyFactoryService(Web3j web3j, Credentials credentials, TransactionManager txManager,
+                          BlockchainProperties props) {
         this.web3j = web3j;
         this.credentials = credentials;
-        this.txManager = new RawTransactionManager(web3j, credentials);
+        this.txManager = txManager;
         this.props = props;
     }
 
