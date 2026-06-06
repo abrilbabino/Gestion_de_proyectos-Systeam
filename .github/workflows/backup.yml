@@ -20,7 +20,10 @@ jobs:
         run: npm install -g supabase
 
       - name: Run Backup
-        run: supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" --data-only=false -f backup.sql
+        run: |
+          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" -f schema.sql
+          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" --data-only --use-copy -f data.sql
+          cat schema.sql data.sql > backup.sql
 
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
