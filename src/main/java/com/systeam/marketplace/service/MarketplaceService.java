@@ -115,19 +115,21 @@ public class MarketplaceService {
 
         Map<String, Object> buyer = findUserOrThrow(buyerId);
         BigDecimal buyerBalance = (BigDecimal) buyer.get("saldo_idea");
-        BigDecimal totalPriceBD = new BigDecimal(totalPrice);
         
-        // Convert from Wei to normal IDEA token units if stored in Wei
-        if (totalPriceBD.compareTo(new BigDecimal("1000000000")) >= 0) {
-            totalPriceBD = totalPriceBD.divide(new BigDecimal("1000000000000000000"), 4, java.math.RoundingMode.HALF_UP);
+        // El precio total siempre esta en Wei (18 decimales), lo convertimos a IDEA (unidad normal)
+        BigDecimal WEI_CONVERSION = new BigDecimal("1000000000000000000");
+        BigDecimal requiredIdea = new BigDecimal(totalPrice).divide(WEI_CONVERSION, 4, java.math.RoundingMode.HALF_UP);
+
+        if (buyerBalance.compareTo(requiredIdea) < 0) {
+            throw new ConflictException(String.format(
+                "Saldo insuficiente. Tienes %s IDEA y necesitas %s IDEA para esta compra.",
+                buyerBalance.stripTrailingZeros().toPlainString(),
+                requiredIdea.stripTrailingZeros().toPlainString()
+            ));
         }
 
-        if (buyerBalance.compareTo(totalPriceBD) < 0) {
-            throw new ConflictException("Saldo insuficiente de tokens IDEA");
-        }
-
-        jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?", totalPriceBD, buyerId);
-        jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", totalPriceBD, sellerId);
+        jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?", requiredIdea, buyerId);
+        jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", requiredIdea, sellerId);
 
         subtokenService.addPortfolioEntry(buyerId, subtokenId, cantidad.intValue());
 

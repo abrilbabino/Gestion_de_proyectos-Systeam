@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,24 +70,42 @@ public class ProjectService {
 
     public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
         Proyecto proyecto = findProjectOrThrow(id);
+        String estado = proyecto.getEstado();
 
-        if (!"PREPARACION".equals(proyecto.getEstado())) {
-            throw new ConflictException("Solo se pueden editar proyectos en estado de preparacion");
+        if (List.of("EJECUCION", "FINALIZADO", "CANCELADO", "RECHAZADO").contains(estado)) {
+            throw new ConflictException("No se pueden editar proyectos en estado " + estado);
         }
 
-        if (request.getTitulo() != null) proyecto.setTitulo(request.getTitulo());
-        if (request.getDescripcion() != null) proyecto.setDescripcion(request.getDescripcion());
-        if (request.getMontoRequerido() != null) proyecto.setMontoRequerido(request.getMontoRequerido());
-        if (request.getPlazo() != null) proyecto.setPlazo(request.getPlazo());
-        if (request.getGobernanzaComunidad() != null) proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad());
-        if (request.getCupoMaximoTokens() != null) proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
-        if (request.getValorNominalToken() != null) proyecto.setValorNominalToken(request.getValorNominalToken());
+        if ("PREPARACION".equals(estado)) {
+            if (request.getTitulo() != null) proyecto.setTitulo(request.getTitulo());
+            if (request.getDescripcion() != null) proyecto.setDescripcion(request.getDescripcion());
+            if (request.getMontoRequerido() != null) proyecto.setMontoRequerido(request.getMontoRequerido());
+            if (request.getPlazo() != null) proyecto.setPlazo(request.getPlazo());
+            if (request.getGobernanzaComunidad() != null) proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad());
+            if (request.getCupoMaximoTokens() != null) proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
+            if (request.getValorNominalToken() != null) proyecto.setValorNominalToken(request.getValorNominalToken());
 
-        Proyecto saved = projectRepository.save(proyecto);
-        if (request.getSimbolo() != null) {
-            jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", request.getSimbolo(), id);
+            Proyecto saved = projectRepository.save(proyecto);
+            if (request.getSimbolo() != null) {
+                jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", request.getSimbolo(), id);
+            }
+            return toResponse(saved, obtenerSimbolo(id));
         }
-        return toResponse(saved, obtenerSimbolo(id));
+
+        if (List.of("EN_AUDITORIA", "FINANCIAMIENTO").contains(estado)) {
+            if (request.getTitulo() != null || request.getMontoRequerido() != null || 
+                request.getPlazo() != null || request.getCupoMaximoTokens() != null || 
+                request.getValorNominalToken() != null || request.getSimbolo() != null) {
+                throw new ConflictException("En estado " + estado + " solo se puede editar la descripción. Los demás campos están bloqueados.");
+            }
+            if (request.getDescripcion() != null) {
+                proyecto.setDescripcion(request.getDescripcion());
+            }
+            Proyecto saved = projectRepository.save(proyecto);
+            return toResponse(saved, obtenerSimbolo(id));
+        }
+
+        throw new ConflictException("Estado de proyecto desconocido");
     }
 
     public ProjectResponse getProjectById(Long id) {
@@ -120,6 +139,14 @@ public class ProjectService {
 
         if (!isValidTransition(currentEstado, newEstado)) {
             throw new ConflictException("Transicion de estado invalida: " + currentEstado + " -> " + newEstado);
+        }
+
+        if ("FINANCIAMIENTO".equals(currentEstado) && "CANCELADO".equals(newEstado)) {
+            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            if (!isAdmin) {
+                throw new ConflictException("Solo un administrador puede cancelar un proyecto que ya está en financiamiento");
+            }
         }
 
         proyecto.setEstado(newEstado);
@@ -180,7 +207,7 @@ public class ProjectService {
             if (proyecto.getPlazo() != null && LocalDateTime.now().isAfter(proyecto.getPlazo())) {
                 boolean fullyFunded = proyecto.getMontoRecaudado() != null
                     && proyecto.getMontoRecaudado().compareTo(proyecto.getMontoRequerido()) >= 0;
-                updateProjectStatus(proyecto.getId(), fullyFunded ? "EJECUCION" : "FINALIZADO");
+                updateProjectStatus(proyecto.getId(), fullyFunded ? "EJECUCION" : "CANCELADO");
             }
         }
     }
