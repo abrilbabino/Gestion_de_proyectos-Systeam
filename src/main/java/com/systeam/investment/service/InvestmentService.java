@@ -1,7 +1,6 @@
 package com.systeam.investment.service;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +15,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.systeam.blockchain.service.InvestmentSwapService;
-import com.systeam.blockchain.service.OfferingContractService;
-import com.systeam.config.BlockchainProperties;
 import com.systeam.investment.dto.CreateInvestmentRequest;
 import com.systeam.investment.dto.InvestmentResponse;
 import com.systeam.investment.dto.ValidateInvestmentRequest;
@@ -40,26 +36,17 @@ public class InvestmentService {
 
     private final InvestmentRepository investmentRepository;
     private final SmartContractService smartContractService;
-    private final InvestmentSwapService investmentSwapService;
-    private final OfferingContractService offeringContractService;
-    private final BlockchainProperties blockchainProperties;
     private final JdbcTemplate jdbc;
     private final SubtokenService subtokenService;
     private final DynamicPricingService dynamicPricingService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
-                             InvestmentSwapService investmentSwapService,
-                             OfferingContractService offeringContractService,
-                             BlockchainProperties blockchainProperties,
                              JdbcTemplate jdbc,
                              SubtokenService subtokenService,
                              DynamicPricingService dynamicPricingService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
-        this.investmentSwapService = investmentSwapService;
-        this.offeringContractService = offeringContractService;
-        this.blockchainProperties = blockchainProperties;
         this.jdbc = jdbc;
         this.subtokenService = subtokenService;
         this.dynamicPricingService = dynamicPricingService;
@@ -174,57 +161,7 @@ public class InvestmentService {
             throw new ConflictException("El monto solicitado supera el cupo disponible del proyecto");
         }
 
-        BigDecimal saldoActual = jdbc.queryForObject(
-            "SELECT saldo_idea FROM users WHERE id = ?", BigDecimal.class, usuarioId
-        );
-
-        if (saldoActual == null || saldoActual.compareTo(request.getMontoIdea()) < 0) {
-            throw new ConflictException("Saldo insuficiente de tokens IDEA");
-        }
-
-        String txHash;
-        boolean swapOnChain = false;
-
-        // 1. Intentar con OfferingContract (contrato nuevo con soft/hard cap)
-        try {
-            BigInteger montoIdeaWei = request.getMontoIdea()
-                .multiply(new BigDecimal("1000000000000000000"))
-                .toBigInteger();
-
-            txHash = offeringContractService.invest(
-                BigInteger.valueOf(request.getProyectoId()),
-                montoIdeaWei
-            );
-            swapOnChain = true;
-            log.info("Inversion via OfferingContract exitosa. Tx: {}", txHash);
-        } catch (Exception e) {
-            log.warn("OfferingContract no disponible: {}. Probando con InvestmentSwap.", e.getMessage());
-
-            // 2. Fallback a InvestmentSwap (contrato legacy)
-            try {
-                BigDecimal montoIdeaWei = request.getMontoIdea()
-                    .multiply(new BigDecimal("1000000000000000000"));
-                BigDecimal subTokenAmountWei = BigDecimal.valueOf(subTokens)
-                    .multiply(new BigDecimal("1000000000000000000"));
-
-                String treasuryAddress = blockchainProperties.getTreasuryAddress();
-
-                txHash = investmentSwapService.invest(
-                    request.getProyectoId(),
-                    montoIdeaWei.toBigInteger(),
-                    subTokenAmountWei.toBigInteger(),
-                    treasuryAddress
-                );
-                swapOnChain = true;
-                log.info("INV-05: Swap on-chain exitoso. Tx: {}", txHash);
-            } catch (Exception e2) {
-                log.warn("INV-05: Swap on-chain no disponible. Fallback a DB-only. Error: {}", e2.getMessage());
-                Map<String, Object> txResult = smartContractService.recordInvestment(
-                    request.getProyectoId(), usuarioId, request.getMontoIdea(), request.getTxHash()
-                );
-                txHash = (String) txResult.get("txHash");
-            }
-        }
+        String txHash = request.getTxHash();
 
         Integer txHashCount = jdbc.queryForObject(
             "SELECT COUNT(*) FROM investments WHERE tx_hash = ?", Integer.class, txHash
@@ -233,8 +170,9 @@ public class InvestmentService {
             throw new ConflictException("La transaccion blockchain ya fue registrada");
         }
 
-        jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?",
-            request.getMontoIdea(), usuarioId);
+        if (!smartContractService.verifyTransaction(txHash)) {
+            throw new ConflictException("La transaccion blockchain no fue encontrada o fallo en Sepolia");
+        }
 
         jdbc.update("UPDATE projects SET monto_recaudado = COALESCE(monto_recaudado, 0) + ? WHERE id = ?",
             request.getMontoIdea(), request.getProyectoId());
@@ -343,8 +281,16 @@ public class InvestmentService {
             int tokens = inv.getSubTokensRecibidos() != null ? inv.getSubTokensRecibidos() : 0;
             BigDecimal refundAmount = precioBase.multiply(BigDecimal.valueOf(tokens));
 
-            smartContractService.refundInvestment(proyectoId, inv.getUsuario().getId(), refundAmount);
+            Map<String, Object> result = smartContractService.refundInvestment(
+                proyectoId, inv.getUsuario().getId(), refundAmount);
 
+            boolean success = (boolean) result.getOrDefault("success", false);
+            if (!success) {
+                throw new ConflictException("Refund on-chain fallo para inversion " + inv.getId()
+                    + " proyecto " + proyectoId + ". Rollback de refunds del proyecto.");
+            }
+
+            inv.setTxHash((String) result.get("refundTxHash"));
             jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?",
                 refundAmount, inv.getUsuario().getId());
 

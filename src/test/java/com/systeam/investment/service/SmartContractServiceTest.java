@@ -186,7 +186,7 @@ class SmartContractServiceTest {
             assertThat(result.get("success")).isEqualTo(false);
             assertThat(result.get("txHash")).isEqualTo(TX_HASH);
             assertThat(result.get("blockNumber")).isEqualTo(0L);
-            assertThat(result.get("note")).isEqualTo("Tx no encontrada en Sepolia - se registra igual en DB");
+            assertThat(result.get("note")).isEqualTo("Tx no encontrada o fallida en Sepolia");
         }
 
         @Test
@@ -197,10 +197,45 @@ class SmartContractServiceTest {
             Map<String, Object> result = service.recordInvestment(
                 PROYECTO_ID, USUARIO_ID, new BigDecimal("200"), TX_HASH);
 
-            assertThat(result.get("success")).isEqualTo(true);
+            assertThat(result.get("success")).isEqualTo(false);
             assertThat(result.get("txHash")).isEqualTo(TX_HASH);
             assertThat(result.get("blockNumber")).isEqualTo(0L);
-            assertThat(((String) result.get("note"))).contains("Blockchain no disponible");
+            assertThat(((String) result.get("note"))).contains("Error de conexion con Sepolia");
+        }
+    }
+
+    @Nested
+    @DisplayName("verifyTransaction")
+    class VerifyTransaction {
+
+        private static final String TX_HASH = "0xverifytx";
+
+        @Test
+        void cuandoTxValida_retornaTrue() throws Exception {
+            when(blockchain.verifyTransaction(TX_HASH)).thenReturn(true);
+
+            boolean result = service.verifyTransaction(TX_HASH);
+
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void cuandoTxInvalida_retornaFalse() throws Exception {
+            when(blockchain.verifyTransaction(TX_HASH)).thenReturn(false);
+
+            boolean result = service.verifyTransaction(TX_HASH);
+
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        void cuandoBlockchainFalla_retornaFalse() throws Exception {
+            when(blockchain.verifyTransaction(TX_HASH))
+                .thenThrow(new RuntimeException("RPC error"));
+
+            boolean result = service.verifyTransaction(TX_HASH);
+
+            assertThat(result).isFalse();
         }
     }
 
@@ -214,17 +249,18 @@ class SmartContractServiceTest {
                 new BigDecimal("500").multiply(new BigDecimal("10").pow(18)).toBigInteger(),
                 TREASURY, TREASURY))
                 .thenReturn("0xrefundx");
+            when(blockchain.verifyTransaction("0xrefundx")).thenReturn(true);
 
             Map<String, Object> result = service.refundInvestment(
                 PROYECTO_ID, USUARIO_ID, new BigDecimal("500"));
 
             assertThat(result.get("success")).isEqualTo(true);
             assertThat(result.get("refundTxHash")).isEqualTo("0xrefundx");
-            assertThat(result.get("note")).isEqualTo("Reembolso on-chain ejecutado en InvestmentSwap");
+            assertThat(result.get("note")).isEqualTo("Reembolso on-chain verificado en InvestmentSwap");
         }
 
         @Test
-        void cuandoRefundRetornaNull_usaModoOffline() throws Exception {
+        void cuandoRefundRetornaNull_retornaFallo() throws Exception {
             when(investmentSwapService.refund(PROYECTO_ID,
                 new BigDecimal("300").multiply(new BigDecimal("10").pow(18)).toBigInteger(),
                 TREASURY, TREASURY))
@@ -233,13 +269,13 @@ class SmartContractServiceTest {
             Map<String, Object> result = service.refundInvestment(
                 PROYECTO_ID, USUARIO_ID, new BigDecimal("300"));
 
-            assertThat(result.get("success")).isEqualTo(true);
-            assertThat(((String) result.get("refundTxHash"))).contains("0xrefund-offline");
-            assertThat(result.get("note")).isEqualTo("Reembolso en modo offline (InvestmentSwap no disponible)");
+            assertThat(result.get("success")).isEqualTo(false);
+            assertThat(result.get("refundTxHash")).isEqualTo("0x0");
+            assertThat(result.get("note")).isEqualTo("InvestmentSwap no disponible");
         }
 
         @Test
-        void cuandoBlockchainFalla_retornaOffline() throws Exception {
+        void cuandoBlockchainFalla_retornaFallo() throws Exception {
             when(investmentSwapService.refund(PROYECTO_ID,
                 new BigDecimal("100").multiply(new BigDecimal("10").pow(18)).toBigInteger(),
                 TREASURY, TREASURY))
@@ -248,9 +284,9 @@ class SmartContractServiceTest {
             Map<String, Object> result = service.refundInvestment(
                 PROYECTO_ID, USUARIO_ID, new BigDecimal("100"));
 
-            assertThat(result.get("success")).isEqualTo(true);
-            assertThat(((String) result.get("refundTxHash"))).contains("0xrefund-");
-            assertThat(((String) result.get("note"))).contains("modo offline");
+            assertThat(result.get("success")).isEqualTo(false);
+            assertThat(((String) result.get("refundTxHash"))).isEqualTo("0x0");
+            assertThat(((String) result.get("note"))).contains("Error en reembolso on-chain");
         }
     }
 

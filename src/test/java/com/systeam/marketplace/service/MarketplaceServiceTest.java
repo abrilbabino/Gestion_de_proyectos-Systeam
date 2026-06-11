@@ -25,6 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaMarketplaceService;
 import com.systeam.marketplace.dto.CreateListingRequest;
 import com.systeam.marketplace.dto.ListingResponse;
@@ -53,11 +54,14 @@ class MarketplaceServiceTest {
     @Mock
     private SubtokenService subtokenService;
 
+    @Mock
+    private BlockchainService blockchainService;
+
     private CreateListingRequest createRequest;
 
     @BeforeEach
     void setUp() {
-        service = new MarketplaceService(jdbc, ideaMarketplaceService, subtokenService);
+        service = new MarketplaceService(jdbc, ideaMarketplaceService, subtokenService, blockchainService);
 
         createRequest = new CreateListingRequest();
         createRequest.setSubtokenId(SUBTOKEN_ID);
@@ -120,27 +124,28 @@ class MarketplaceServiceTest {
     }
 
     @Test
-    void createListing_retornaListingResponse() throws Exception {
-        mockUserFound();
-        mockSubtokenFound();
-        mockPrecioBaseValido();
-        mockPortfolioSuficiente();
+        void createListing_retornaListingResponse() throws Exception {
+            mockUserFound();
+            mockSubtokenFound();
+            mockPrecioBaseValido();
+            mockPortfolioSuficiente();
 
-        when(ideaMarketplaceService.listTokens(anyString(), any(), any()))
-            .thenReturn("0xtxhash");
+            when(ideaMarketplaceService.listTokens(anyString(), any(), any()))
+                .thenReturn("0xtxhash");
+            when(blockchainService.verifyTransaction("0xtxhash")).thenReturn(true);
 
-        when(jdbc.queryForObject(anyString(), eq(Long.class), eq(SELLER_ID), eq(SUBTOKEN_ID),
-            eq(CANTIDAD), eq(CANTIDAD), eq(PRECIO_UNITARIO), any()))
-            .thenReturn(LISTING_ID);
+            when(jdbc.queryForObject(anyString(), eq(Long.class), eq(SELLER_ID), eq(SUBTOKEN_ID),
+                eq(CANTIDAD), eq(CANTIDAD), eq(PRECIO_UNITARIO), any()))
+                .thenReturn(LISTING_ID);
 
-        mockGetListingById(LISTING_ID);
+            mockGetListingById(LISTING_ID);
 
-        ListingResponse result = service.createListing(SELLER_ID, createRequest);
+            ListingResponse result = service.createListing(SELLER_ID, createRequest);
 
-        assertThat(result.getId()).isEqualTo(LISTING_ID);
-        assertThat(result.getEstado()).isEqualTo("ACTIVE");
-        verify(jdbc).update(anyString(), eq(CANTIDAD), eq(SELLER_ID), eq(SUBTOKEN_ID));
-    }
+            assertThat(result.getId()).isEqualTo(LISTING_ID);
+            assertThat(result.getEstado()).isEqualTo("ACTIVE");
+            verify(jdbc).update(anyString(), eq(CANTIDAD), eq(SELLER_ID), eq(SUBTOKEN_ID));
+        }
 
     // ═════════════════════════════════════════════════════
     // buyFromListing
@@ -199,6 +204,7 @@ class MarketplaceServiceTest {
         mockFindListingOrThrow("ACTIVE", 50);
 
         when(ideaMarketplaceService.buyTokens(any(), any())).thenReturn("0xbuytx");
+        when(blockchainService.verifyTransaction("0xbuytx")).thenReturn(true);
 
         // Buyer tiene saldo suficiente para pagar PRECIO_UNITARIO * CANTIDAD
         when(jdbc.query(argThat(s -> s != null && s.toString().contains("FROM users")), any(RowMapper.class), eq(BUYER_ID)))
@@ -241,6 +247,7 @@ class MarketplaceServiceTest {
     void cancelListing_ejecutaCorrectamente() throws Exception {
         mockFindListingOrThrow("ACTIVE", 10);
         when(ideaMarketplaceService.cancelListing(any())).thenReturn("0xcanceltx");
+        when(blockchainService.verifyTransaction("0xcanceltx")).thenReturn(true);
 
         service.cancelListing(SELLER_ID, LISTING_ID);
 

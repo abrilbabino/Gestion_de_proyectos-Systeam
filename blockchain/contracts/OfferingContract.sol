@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "./IdeafyFactory.sol";
+import "./SubToken.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -13,6 +14,8 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     IERC20 public immutable idea;
     IdeafyFactory public immutable factory;
 
+    address public treasury;
+    uint256 public constant ISSUANCE_FEE_BPS = 500;
     uint256 public constant MAX_INVESTORS = 500;
     uint256 public constant GRACE_PERIOD = 30 days;
 
@@ -39,6 +42,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     event OfferingFinalized(uint256 indexed proyectoId, bool success);
     event TokensClaimed(uint256 indexed proyectoId, address indexed investor, uint256 amount);
     event RefundMade(uint256 indexed proyectoId, address indexed investor, uint256 amount);
+    event TreasurySet(address indexed treasury);
 
     constructor(address _idea, address _factory) {
         require(_idea != address(0), "Offering: invalid IDEA");
@@ -47,6 +51,13 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         factory = IdeafyFactory(_factory);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
+        treasury = msg.sender;
+    }
+
+    function setTreasury(address _treasury) external onlyRole(ADMIN_ROLE) {
+        require(_treasury != address(0), "Offering: invalid treasury");
+        treasury = _treasury;
+        emit TreasurySet(_treasury);
     }
 
     function registerOffering(
@@ -57,7 +68,9 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         uint256 basePrice,
         uint256 startTime,
         uint256 endTime
-    ) external onlyRole(ADMIN_ROLE) {
+    ) external {
+        require(msg.sender == creator || hasRole(ADMIN_ROLE, msg.sender),
+            "Offering: not authorized");
         require(offerings[proyectoId].proyectoId == 0, "Offering: already registered");
         require(softCap > 0, "Offering: softCap > 0");
         require(hardCap >= softCap, "Offering: hardCap >= softCap");
@@ -65,8 +78,11 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(startTime < endTime, "Offering: startTime < endTime");
         require(endTime > block.timestamp, "Offering: endTime in future");
         require(creator != address(0), "Offering: invalid creator");
-        require(factory.subTokenOfProject(proyectoId) != address(0),
+        address subToken = factory.subTokenOfProject(proyectoId);
+        require(subToken != address(0),
             "Offering: project must have a token first");
+        require(SubToken(subToken).creator() == creator,
+            "Offering: creator mismatch");
 
         offerings[proyectoId] = Offering({
             proyectoId: proyectoId,
@@ -161,8 +177,15 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
 
         if (off.totalInvested >= off.softCap) {
             off.success = true;
-            require(idea.transfer(off.creator, off.totalInvested),
+            require(treasury != address(0), "Offering: treasury not set");
+            uint256 fee = (off.totalInvested * ISSUANCE_FEE_BPS) / 10000;
+            uint256 netAmount = off.totalInvested - fee;
+            require(idea.transfer(off.creator, netAmount),
                 "Offering: creator transfer failed");
+            if (fee > 0) {
+                require(idea.transfer(treasury, fee),
+                    "Offering: fee transfer failed");
+            }
         }
 
         emit OfferingFinalized(proyectoId, off.success);

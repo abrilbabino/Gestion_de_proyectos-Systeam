@@ -7,6 +7,7 @@ Este archivo reúne toda la documentación técnica del proyecto IDEAFY en un so
 ## Índice
 
 - [1. Stage 1 — Smart Contracts de IDEAFY](#1-stage-1--smart-contracts-de-ideafy)
+- [💰 Modelo de Comisiones — Cómo ganamos plata](#-modelo-de-comisiones-de-ideafy--cómo-ganamos-plata)
 - [2. Stage 2 — Backend Java](#2-stage-2--backend-java)
 - [3. Stage 4 — Dynamic Pricing con Factor de Rendimiento](#3-stage-4--dynamic-pricing-con-factor-de-rendimiento)
 - [4. Stage 5 — Marketplace de Sub-Tokens](#4-stage-5--marketplace-de-sub-tokens)
@@ -726,9 +727,9 @@ contract IdeaToken is ERC20Burnable, AccessControl {
     // no tenga valor. Es el mismo orden de magnitud que tokens como UNI o AAVE.
     uint256 public constant MAX_SUPPLY = 100_000_000e18;
 
-    // BURN_BPS = 100 basis points = 1%. "BPS" es "basis points" = 1/100 de 1%.
+    // BURN_BPS = 1 basis point = 0.01%. "BPS" es "basis points" = 1/100 de 1%.
     // En finanzas, todo se mide en bps porque evita errores con decimales.
-    uint256 public constant BURN_BPS = 100;
+    uint256 public constant BURN_BPS = 1;
 
     // El constructor se ejecuta UNA SOLA VEZ cuando deployamos el contrato.
     // No se puede volver a ejecutar.
@@ -744,16 +745,16 @@ contract IdeaToken is ERC20Burnable, AccessControl {
 
     // _update() es la función que Solidity llama internamente SIEMPRE que
     // se hace una transferencia (transfer, transferFrom, mint, burn).
-    // Overrideamos para agregar el burn de 1%.
+    // Overrideamos para agregar el burn de 0.01%.
     function _update(address from, address to, uint256 amount) internal override {
         // from == address(0) significa que es un mint (creación de tokens)
         // to == address(0) significa que es un burn (destrucción de tokens)
         // En ambos casos, NO queremos quemar (sería un loop infinito).
         if (from != address(0) && to != address(0)) {
-            // Calculamos cuánto quemar: amount * 100 / 10000 = 1%
+            // Calculamos cuánto quemar: amount * 1 / 10000 = 0.01%
             uint256 burn = (amount * BURN_BPS) / 10000;
             if (burn > 0) {
-                // Primero: quemamos el 1%. to = address(0) significa "quemar".
+                // Primero: quemamos el 0.01%. to = address(0) significa "quemar".
                 super._update(from, address(0), burn);
                 // Después: transferimos el 99% restante al destinatario.
                 super._update(from, to, amount - burn);
@@ -2178,7 +2179,7 @@ IdeafyFactory deploya nuevos SubTokens mediante `ERC1967Proxy` apuntando a una
 implementación de SubToken upgradeable.
 
 **Fee**
-Comisión que cobra la plataforma por una operación. En IDEAFY: swap 1%, marketplace 2.5%,
+Comisión que cobra la plataforma por una operación. En IDEAFY: swap 0.05%, marketplace 2.5%,
 transferencia de $IDEA 1% (burn).
 
 ### G
@@ -2343,6 +2344,238 @@ Unidad más pequeña de Ether (y de tokens ERC-20 con 18 decimales). 1 token = 1
 Todos nuestros cálculos internos usan wei para evitar errores de redondeo.
 
 ---
+
+# 💰 Modelo de Comisiones de IDEAFY — Cómo ganamos plata
+
+*Esta sección explica cómo la plata genera ingresos. Está pensada para que la entienda cualquiera, sin importar si sabe o no de blockchain.*
+
+---
+
+## 1. La idea general
+
+Imaginate que IDEAFY es como MercadoLibre o Airbnb, pero para proyectos que buscan inversión.
+
+En MercadoLibre, cuando vendés algo, la plataforma te cobra una comisión por usar el servicio. En Airbnb, cuando alquilás un departamento, Airbnb se queda un porcentaje.
+
+Acá es lo mismo. Nuestra plataforma conecta:
+- **Creadores**: gente que tiene una idea y necesita financiamiento.
+- **Inversores**: gente que tiene $IDEA y quiere invertir en proyectos.
+
+Cada vez que alguien usa la plataforma para algo que genera valor (invertir, comprar, cambiar tokens), nosotras cobramos un pequeño porcentaje. Así funciona el modelo.
+
+Pero todo esto está programado en los Smart Contracts (los contratos inteligentes en la blockchain), no lo decidimos nosotros después. Cuando deployamos los contratos, las comisiones quedan escritas en piedra. Bueno, algunas se pueden cambiar, otras no. Vamos por partes.
+
+---
+
+## 2. Comisión 1: Funding — 5% del capital recaudado en una ronda
+
+**¿Cuándo se cobra?**
+
+Cuando un proyecto sale a financiamiento (pasa de "Preparación" a "Financiamiento") y logra juntar la plata mínima (softCap), la ronda se cierra exitosamente. En ese momento cobramos el 5%.
+
+**¿Cómo funciona?**
+
+1. Inversores ponen plata en el proyecto. Digamos que juntan 10.000 $IDEA entre todos.
+2. La ronda termina y fue exitosa (llegó al softCap).
+3. El contrato `OfferingContract.sol` agarra el 5% de esos 10.000: 500 $IDEA.
+4. Esos 500 $IDEA se mandan a la **treasury** (la billetera de la plataforma).
+5. El creador recibe los 9.500 $IDEA restantes para desarrollar su proyecto.
+
+**¿Y si la ronda falla?**
+
+Si el proyecto no junta el softCap, la ronda se cancela y cada inversor recupera su plata. **No se cobra comisión.** Nos parece más justo: si el proyecto no llega a meta, no ganamos nada.
+
+**¿Dónde está definido?**
+
+En el contrato `OfferingContract.sol`, línea 17:
+```solidity
+uint256 public constant ISSUANCE_FEE_BPS = 500;
+```
+
+`500` son "500 basis points". En finanzas, 1 basis point (bps) = 0.01%. Entonces 500 bps = 5%.
+
+**¿Se puede cambiar?**
+
+No. Está como `constant` de Solidity, lo que significa que está grabado en el bytecode del contrato para siempre. Ni el admin puede cambiarlo. Si quisiéramos cambiarlo, habría que deployar un contrato nuevo.
+
+---
+
+## 3. Comisión 2: Marketplace — 2.5% de cada venta de sub-tokens
+
+**¿Cuándo se cobra?**
+
+Cuando un inversor compra sub-tokens de un proyecto en el marketplace (el mercado secundario). Cada vez que alguien vende, el contrato retiene el 2.5% del total de la operación.
+
+**¿Cómo funciona?**
+
+1. Alice quiere vender 100 sub-tokens del Proyecto X a 2 $IDEA cada uno.
+2. Bob compra esos 100 sub-tokens. Paga 200 $IDEA.
+3. El contrato `IdeaMarketplace.sol` calcula: 200 × 2.5% = 5 $IDEA de comisión.
+4. Alice recibe 195 $IDEA (200 - 5).
+5. Los 5 $IDEA se quedan en el contrato, acumulándose.
+6. El admin puede llamar a `collectFees()` para retirar todos los $IDEA acumulados y mandarlos a la treasury.
+
+**¿Dónde está definido?**
+
+En el contrato `IdeaMarketplace.sol`, línea 15:
+```solidity
+uint256 public feeBps = 250;
+```
+
+250 bps = 2.5%.
+
+**¿Se puede cambiar?**
+
+Sí. El admin puede llamar a `updateFee(nuevoFee)` para cambiarlo. Pero hay un límite: no puede pasar del 10% (1000 bps).
+
+---
+
+## 4. Comisión 3: Swap — 0.05% de cada intercambio $IDEA ↔ USDC
+
+**¿Cuándo se cobra?**
+
+Cuando alguien usa el IdeaSwap para cambiar $IDEA por USDC (o viceversa).
+
+**¿Cómo funciona?**
+
+1. Un inversor quiere cambiar 100 $IDEA por USDC.
+2. El contrato `IdeaSwap.sol` calcula cuántos USDC le corresponden según el pool de liquidez.
+3. Además, calcula la comisión: 100 × 0.05% = 0.05 $IDEA.
+4. El inversor paga 100.05 $IDEA (100 + 0.05 de comisión).
+5. Esa comisión se queda en el pool de liquidez del contrato.
+
+**¿Por qué tan baja (0.05%)?**
+
+Porque el swap está pensado para que sea barato y líquido. Si cobráramos mucho, la gente no usaría el swap y se iría a Uniswap. El 0.05% es mucho más bajo que el 0.3% que cobra Uniswap, por ejemplo. La idea es incentivar el uso del pool propio.
+
+**¿Dónde está definido?**
+
+En el contrato `IdeaSwap.sol`, línea 16:
+```solidity
+uint256 public feeBps = 5;
+```
+
+5 bps = 0.05%.
+
+**¿Se puede cambiar?**
+
+Sí. El admin puede llamar a `updateFee(nuevoFee)`. Tope máximo del 10%.
+
+---
+
+## 5. Comisión 4: Dividendos — 0.5% de cada distribución de dividendos
+
+**¿Cuándo se cobra?**
+
+Cuando el admin distribuye dividendos a los inversores de un proyecto (en la función `distribute()` del contrato `DividendDistributor`).
+
+**¿Cómo funciona?**
+
+1. El admin quiere distribuir 10.000 $IDEA como dividendos a los holders del Proyecto X.
+2. Llama a `distribute()` en el `DividendDistributor`.
+3. El contrato recibe los 10.000 $IDEA.
+4. Calcula: 10.000 × 0.5% = 50 $IDEA de comisión.
+5. Esos 50 $IDEA se mandan a la treasury de la plataforma.
+6. Los 9.950 $IDEA restantes se distribuyen entre los inversores según sus tenencias.
+
+**¿Dónde está definido?**
+
+En el contrato `DividendDistributor.sol`, línea 18:
+```solidity
+uint256 public constant DISTRIBUTION_FEE_BPS = 50;
+```
+
+50 bps = 0.5%.
+
+**¿Se puede cambiar?**
+
+No. Es constante, como el fee de funding.
+
+---
+
+## 6. Comisión 5: Quema de $IDEA — 0.01% en cada transferencia externa
+
+**¿Cuándo se quema?**
+
+Cada vez que alguien transfiere $IDEA de una wallet a otra (que no sea el minteo inicial ni un burn explícito), se destruye automáticamente el 0.01% del monto transferido.
+
+**¿Cómo funciona?**
+
+1. Alice le transfiere 10.000 $IDEA a Bob.
+2. El contrato `IdeaToken.sol` intercepta la transferencia.
+3. Calcula: 10.000 × 0.01% = 1 $IDEA.
+4. Ese 1 $IDEA se manda a `address(0)` (la dirección cero, que es el "agujero negro" de Ethereum). Se destruye para siempre.
+5. Bob recibe 9.999 $IDEA en lugar de 10.000.
+
+**¿Por qué hacemos esto?**
+
+Esto se llama **mecanismo deflacionario**. Con el tiempo:
+- Más actividad → más transferencias → más quemas.
+- El supply total de $IDEA baja.
+- Como hay menos $IDEA circulando, cada $IDEA vale más.
+- La plataforma tiene 50 millones de $IDEA en su tesorería. Si el supply total baja, esos 50 millones representan un porcentaje más grande del total, y la tesorería vale más sin hacer nada.
+
+**¿Dónde está definido?**
+
+En el contrato `IdeaToken.sol`, línea 12:
+```solidity
+uint256 public constant BURN_BPS = 1;
+```
+
+1 bps = 0.01%.
+
+**¿Se puede cambiar?**
+
+No. Es constante. Ni siquiera el dueño del contrato puede cambiarla. Está grabada en el bytecode para siempre.
+
+---
+
+## 7. Otras fuentes de ingreso
+
+Además de las comisiones en blockchain, tenemos:
+
+**Boost de proyectos**: los creadores pueden pagar una tarifa fija en $IDEA para que su proyecto aparezca destacado en el catálogo (con una estrella dorada y en la primera posición). Esto está manejado por el backend (`BoostService.java`) y la tabla `projects` tiene las columnas `es_destacado` y `fecha_boost`.
+
+**Apreciación de tesorería**: como explicamos arriba, la quema del 0.01% hace que el $IDEA se vuelva más escaso. La tesorería de la plataforma tiene 50M de $IDEA. Si el supply baja de 100M a 80M, esos 50M ahora son el 62.5% en vez del 50%. El valor sube sin que hagamos nada.
+
+---
+
+## 8. Tabla resumen de todas las comisiones
+
+| # | Comisión | Porcentaje | Contrato | Variable | Cambiable? | Límite |
+|---|----------|-----------|----------|----------|-----------|--------|
+| 1 | Funding | 5% del total recaudado | `OfferingContract.sol` | `ISSUANCE_FEE_BPS = 500` | ❌ No | — |
+| 2 | Marketplace | 2.5% de cada venta | `IdeaMarketplace.sol` | `feeBps = 250` | ✅ Sí | 10% máx |
+| 3 | Swap | 0.05% de cada intercambio | `IdeaSwap.sol` | `feeBps = 5` | ✅ Sí | 10% máx |
+| 4 | Dividendos | 0.5% de cada distribución | `DividendDistributor.sol` | `DISTRIBUTION_FEE_BPS = 50` | ❌ No | — |
+| 5 | Quema (burn) | 0.01% por transferencia | `IdeaToken.sol` | `BURN_BPS = 1` | ❌ No | — |
+
+---
+
+## 9. Preguntas frecuentes
+
+**¿Por qué algunas comisiones son fijas y otras se pueden cambiar?**
+
+Las que son fijas (funding, dividendos, burn) son la base del modelo de negocio. Si alguien las cambiara, podría romper el equilibrio económico. Las que son variables (marketplace, swap) pueden ajustarse según el mercado: si queremos atraer más volumen, las bajamos; si queremos más ingresos, las subimos (hasta el 10%).
+
+**¿Quién puede cambiar las variables?**
+
+Solo una dirección con rol `ADMIN_ROLE`. En el deploy inicial, es la wallet del admin que deployó los contratos.
+
+**¿El backend puede cambiar las comisiones?**
+
+Técnicamente sí, si la wallet del backend tiene `ADMIN_ROLE`. Pero no está implementado en el backend actualmente.
+
+**¿Dónde va la plata de las comisiones?**
+
+- **Funding**: va directo a la `treasury` del `OfferingContract` (por defecto, la wallet del admin que deployó).
+- **Marketplace**: se acumula en el contrato `IdeaMarketplace` y el admin la retira con `collectFees()`.
+- **Swap**: se queda en el pool de liquidez del contrato `IdeaSwap` (aumenta las reservas).
+- **Dividendos**: va directo a la `treasury` del `DividendDistributor`.
+
+**¿Los inversores ven estas comisiones?**
+
+En las transacciones en blockchain sí, porque están programadas en los contratos y cualquier persona puede leer el código o ver los eventos. En la interfaz de usuario, las comisiones deberían mostrarse antes de confirmar cada operación (ej: "Comisión: 2.5% — 5 $IDEA").
 
 
 ## 2. Stage 2 � Backend Java

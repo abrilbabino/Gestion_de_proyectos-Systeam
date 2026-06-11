@@ -11,7 +11,7 @@ contract IdeaTokenTest is Test {
     address public bob = address(0x333);
 
     uint256 public constant MAX_SUPPLY = 100_000_000e18;
-    uint256 public constant BURN_BPS = 100; // 1%
+    uint256 public constant BURN_BPS = 1; // 0.01%
 
     function setUp() public {
         vm.startPrank(deployer);
@@ -38,7 +38,7 @@ contract IdeaTokenTest is Test {
         assertEq(token.BURN_BPS(), BURN_BPS);
     }
 
-    function test_TransferBurnsOnePercent() public {
+    function test_TransferBurnsPointZeroOnePercent() public {
         uint256 transferAmount = 1000e18;
         uint256 expectedBurn = (transferAmount * BURN_BPS) / 10000;
         uint256 expectedReceived = transferAmount - expectedBurn;
@@ -62,7 +62,7 @@ contract IdeaTokenTest is Test {
         vm.prank(deployer);
         token.transfer(alice, amount);
 
-        // Transfer burns 1%: alice gets amount - 1%
+        // Transfer burns 0.01%: alice gets amount - 0.01%
         uint256 aliceBalance = token.balanceOf(alice);
         uint256 expectedBurnOnTransfer = (amount * BURN_BPS) / 10000;
         assertEq(aliceBalance, amount - expectedBurnOnTransfer);

@@ -9,7 +9,7 @@ contract IdeaToken is ERC20Burnable, AccessControl {
     bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
 
     uint256 public constant MAX_SUPPLY = 100_000_000e18;
-    uint256 public constant BURN_BPS = 100;
+    uint256 public constant BURN_BPS = 1;
 
     constructor() ERC20("IDEAFY Platform", "IDEA") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);

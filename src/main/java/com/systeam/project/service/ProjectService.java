@@ -142,24 +142,26 @@ public class ProjectService {
         }
 
         if ("FINANCIAMIENTO".equals(currentEstado) && "CANCELADO".equals(newEstado)) {
-            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities()
-                .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-            if (!isAdmin) {
-                throw new ConflictException("Solo un administrador puede cancelar un proyecto que ya está en financiamiento");
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null) {
+                boolean isAdmin = auth.getAuthorities()
+                    .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                if (!isAdmin) {
+                    throw new ConflictException("Solo un administrador puede cancelar un proyecto que ya está en financiamiento");
+                }
             }
         }
 
         proyecto.setEstado(newEstado);
 
-        if ("FINANCIAMIENTO".equals(newEstado) && proyecto.getPlazo() == null) {
-            proyecto.setPlazo(LocalDateTime.now().plusDays(30));
+        if ("FINANCIAMIENTO".equals(newEstado)) {
+            if (proyecto.getPlazo() == null) {
+                proyecto.setPlazo(LocalDateTime.now().plusDays(30));
+            }
+            crearSubtokenParaProyecto(proyecto);
         }
 
         projectRepository.save(proyecto);
-
-        if ("FINANCIAMIENTO".equals(newEstado)) {
-            crearSubtokenParaProyecto(proyecto);
-        }
     }
 
     private void crearSubtokenParaProyecto(Proyecto proyecto) {

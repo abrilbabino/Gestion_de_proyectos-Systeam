@@ -25,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
@@ -43,11 +44,14 @@ class DividendServiceTest {
     @Mock
     private DividendDistributorService dividendDistributorService;
 
+    @Mock
+    private BlockchainService blockchainService;
+
     private DividendService service;
 
     @BeforeEach
     void setUp() {
-        service = spy(new DividendService(jdbc, dividendDistributorService));
+        service = spy(new DividendService(jdbc, dividendDistributorService, blockchainService));
     }
 
     @Nested
@@ -75,9 +79,11 @@ class DividendServiceTest {
         }
 
         @Test
-        void cuandoNoHaySubtokens_lanzaConflict() {
+        void cuandoNoHaySubtokens_lanzaConflict() throws Exception {
             when(jdbc.queryForObject(anyString(), eq(String.class), eq(PROYECTO_ID)))
                 .thenReturn("EJECUCION");
+            when(dividendDistributorService.distribute(any(), any())).thenReturn("0xdisttx");
+            when(blockchainService.verifyTransaction("0xdisttx")).thenReturn(true);
             when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(PROYECTO_ID)))
                 .thenReturn(0);
 
@@ -90,6 +96,8 @@ class DividendServiceTest {
         void cuandoHaySubtokens_creaReparto() throws Exception {
             when(jdbc.queryForObject(anyString(), eq(String.class), eq(PROYECTO_ID)))
                 .thenReturn("EJECUCION");
+            when(dividendDistributorService.distribute(any(), any())).thenReturn("0xdisttx");
+            when(blockchainService.verifyTransaction("0xdisttx")).thenReturn(true);
             when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(PROYECTO_ID)))
                 .thenReturn(10);
             when(jdbc.queryForObject(anyString(), eq(Long.class), eq(PROYECTO_ID),
@@ -106,21 +114,15 @@ class DividendServiceTest {
         }
 
         @Test
-        void cuandoDistribuidorFalla_creaRepartoEnDb() throws Exception {
+        void cuandoDistribuidorFalla_lanzaConflict() throws Exception {
             when(jdbc.queryForObject(anyString(), eq(String.class), eq(PROYECTO_ID)))
                 .thenReturn("FINALIZADO");
-            when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(PROYECTO_ID)))
-                .thenReturn(5);
             when(dividendDistributorService.distribute(any(), any()))
                 .thenThrow(new RuntimeException("On-chain no disponible"));
-            when(jdbc.queryForObject(argThat(sql -> sql != null && sql.toString().contains("INSERT INTO dividendos")),
-                eq(Long.class), eq(PROYECTO_ID), eq(new BigDecimal("500")),
-                eq(new BigDecimal("100.0000"))))
-                .thenReturn(99L);
 
-            Long result = service.crearReparto(PROYECTO_ID, new BigDecimal("500"));
-
-            assertThat(result).isEqualTo(99L);
+            assertThatThrownBy(() -> service.crearReparto(PROYECTO_ID, new BigDecimal("500")))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Error al distribuir dividendos on-chain");
         }
     }
 
@@ -182,7 +184,9 @@ class DividendServiceTest {
     class ReclamarDividendos {
 
         @Test
-        void cuandoNoTieneActivos_lanzaConflict() {
+        void cuandoNoTieneActivos_lanzaConflict() throws Exception {
+            when(dividendDistributorService.getClaimable(
+                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.ZERO);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of());
 
@@ -192,7 +196,9 @@ class DividendServiceTest {
         }
 
         @Test
-        void cuandoNoHayDividendos_lanzaConflict() {
+        void cuandoNoHayDividendos_lanzaConflict() throws Exception {
+            when(dividendDistributorService.getClaimable(
+                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.ZERO);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of(Map.of("subtokenId", 5L, "cantidad", 10, "nombre", "TokenX")));
             when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
@@ -204,7 +210,11 @@ class DividendServiceTest {
         }
 
         @Test
-        void reclamacionExitosa() {
+        void reclamacionExitosa() throws Exception {
+            when(dividendDistributorService.getClaimable(
+                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.valueOf(500));
+            when(dividendDistributorService.claim(BigInteger.valueOf(PROYECTO_ID))).thenReturn("0xclaimtx");
+            when(blockchainService.verifyTransaction("0xclaimtx")).thenReturn(true);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of(Map.of("subtokenId", 5L, "cantidad", 10, "nombre", "TokenX")));
             when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))

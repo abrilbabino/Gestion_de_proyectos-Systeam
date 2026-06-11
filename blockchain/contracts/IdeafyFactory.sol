@@ -47,7 +47,9 @@ contract IdeafyFactory is AccessControl {
         string calldata nombre,
         string calldata simbolo,
         uint256 supplyInicial
-    ) external onlyRole(CREATOR_ROLE) returns (address tokenAddr) {
+    ) external returns (address tokenAddr) {
+        require(msg.sender == creator || hasRole(CREATOR_ROLE, msg.sender),
+            "IdeafyFactory: not authorized");
         require(subTokenImplementation != address(0),
             "IdeafyFactory: implementation not set");
         require(subTokenOfProject[proyectoId] == address(0),
@@ -103,6 +105,12 @@ contract IdeafyFactory is AccessControl {
         for (uint256 i = 0; i < resultCount; i++) {
             tokens[i] = allSubTokens[offset + i];
         }
+    }
+
+    function setDividendDistributor(uint256 proyectoId, address dd) external onlyRole(ADMIN_ROLE) {
+        SubToken sub = SubToken(subTokenOfProject[proyectoId]);
+        require(address(sub) != address(0), "IdeafyFactory: project not found");
+        sub.setDividendDistributor(dd);
     }
 
     function allocateTokens(

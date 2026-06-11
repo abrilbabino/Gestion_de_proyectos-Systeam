@@ -1,6 +1,7 @@
 package com.systeam.governance.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaGovernanceService;
 import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
@@ -38,6 +39,7 @@ class GovernanceControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @MockBean private BlockchainService blockchainService;
     @MockBean private IdeaGovernanceService onChainService;
     @MockBean private GovernanceService offChainService;
 
@@ -72,9 +74,10 @@ class GovernanceControllerTest {
 
     @Test
     @WithMockUser(authorities = "governance:create")
-    void createProposal_conPermiso_retorna201() throws Exception {
-        when(onChainService.createProposal(any(), any(), any())).thenReturn("0xtx");
-        when(offChainService.createProposalOffChain(any(), any(), any(), any())).thenReturn(new ProposalResponse());
+        void createProposal_conPermiso_retorna201() throws Exception {
+            when(onChainService.createProposal(any(), any(), any())).thenReturn("0xtx");
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(offChainService.createProposalOffChain(any(), any(), any(), any())).thenReturn(new ProposalResponse());
         when(onChainService.getProposalCount()).thenReturn(BigInteger.ONE);
         when(offChainService.getProposalById(any())).thenReturn(new ProposalResponse());
 
@@ -130,8 +133,9 @@ class GovernanceControllerTest {
 
     @Test
     @WithMockUser(authorities = "governance:execute")
-    void executeProposal_conPermiso_retorna200() throws Exception {
-        when(onChainService.executeProposal(any())).thenReturn("0xtx");
+        void executeProposal_conPermiso_retorna200() throws Exception {
+            when(onChainService.executeProposal(any())).thenReturn("0xtx");
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
 
         mockMvc.perform(post("/api/governance/proposals/1/execute")
                 .with(csrf()))

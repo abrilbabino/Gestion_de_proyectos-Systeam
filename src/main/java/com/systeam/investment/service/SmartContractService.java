@@ -111,16 +111,25 @@ public class SmartContractService {
                 result.put("treasuryTokensBalance", balance);
             } else {
                 result.put("blockNumber", 0L);
-                result.put("note", "Tx no encontrada en Sepolia - se registra igual en DB");
+                result.put("note", "Tx no encontrada o fallida en Sepolia");
             }
         } catch (Exception e) {
             log.error("Error recordInvestment: {}", e.getMessage());
-            result.put("success", true);
+            result.put("success", false);
             result.put("txHash", txHash);
             result.put("blockNumber", 0L);
-            result.put("note", "Blockchain no disponible - modo offline: " + e.getMessage());
+            result.put("note", "Error de conexion con Sepolia: " + e.getMessage());
         }
         return result;
+    }
+
+    public boolean verifyTransaction(String txHash) {
+        try {
+            return blockchain.verifyTransaction(txHash);
+        } catch (Exception e) {
+            log.error("Error verifying tx {}: {}", txHash, e.getMessage());
+            return false;
+        }
     }
 
     public Map<String, Object> refundInvestment(Long proyectoId, Long usuarioId, BigDecimal montoIdea) {
@@ -132,20 +141,50 @@ public class SmartContractService {
                 props.getTreasuryAddress(),
                 props.getTreasuryAddress()
             );
-            if (refundTx != null) {
+            if (refundTx != null && blockchain.verifyTransaction(refundTx)) {
                 result.put("success", true);
                 result.put("refundTxHash", refundTx);
-                result.put("note", "Reembolso on-chain ejecutado en InvestmentSwap");
+                result.put("note", "Reembolso on-chain verificado en InvestmentSwap");
             } else {
-                result.put("success", true);
-                result.put("refundTxHash", "0xrefund-offline-" + System.currentTimeMillis());
-                result.put("note", "Reembolso en modo offline (InvestmentSwap no disponible)");
+                log.warn("refundInvestment fallo en blockchain para proyecto {} usuario {}", proyectoId, usuarioId);
+                result.put("success", false);
+                result.put("refundTxHash", refundTx != null ? refundTx : "0x0");
+                result.put("note", refundTx == null
+                    ? "InvestmentSwap no disponible"
+                    : "Transaccion de reembolso no encontrada o fallida en Sepolia");
             }
         } catch (Exception e) {
             log.error("Error refundInvestment: {}", e.getMessage());
-            result.put("success", true);
-            result.put("refundTxHash", "0xrefund-" + System.currentTimeMillis());
-            result.put("note", "Reembolso en modo offline: " + e.getMessage());
+            result.put("success", false);
+            result.put("refundTxHash", "0x0");
+            result.put("note", "Error en reembolso on-chain: " + e.getMessage());
+        }
+        return result;
+    }
+
+    private static final BigDecimal COSTO_BOOST_IDEA = new BigDecimal("100");
+    private static final String BOOST_FEE_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+
+    public Map<String, Object> boostProject() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            BigInteger amountWei = COSTO_BOOST_IDEA.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
+            String txHash = blockchain.transferIdea(BOOST_FEE_ADDRESS, amountWei);
+            if (blockchain.verifyTransaction(txHash)) {
+                result.put("success", true);
+                result.put("txHash", txHash);
+                result.put("note", "Boost on-chain verificado en Sepolia");
+            } else {
+                log.warn("boostProject fallo en blockchain");
+                result.put("success", false);
+                result.put("txHash", txHash);
+                result.put("note", "Transaccion de boost no encontrada o fallida en Sepolia");
+            }
+        } catch (Exception e) {
+            log.error("Error boostProject: {}", e.getMessage());
+            result.put("success", false);
+            result.put("txHash", "0x0");
+            result.put("note", "Error en boost on-chain: " + e.getMessage());
         }
         return result;
     }

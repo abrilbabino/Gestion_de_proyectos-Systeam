@@ -28,10 +28,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.InvestmentSwapService;
 import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.config.BlockchainProperties;
+import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.dto.CreateTokenRequest;
 import com.systeam.tokenization.dto.TokenResponse;
@@ -44,6 +46,8 @@ class TokenizationServiceTest {
     private static final String TREASURY = "0xtreasury123456789012345678901234567890123456";
     private static final String TOKEN_ADDR = "0xtoken45678901234567890123456789012345678901";
 
+    @Mock
+    private BlockchainService blockchainService;
     @Mock
     private IdeafyFactoryService ideafyFactoryService;
     @Mock
@@ -65,9 +69,9 @@ class TokenizationServiceTest {
         blockchainProperties = new BlockchainProperties();
         blockchainProperties.setTreasuryAddress(TREASURY);
         blockchainProperties.setProjectTokenAddress(TOKEN_ADDR);
-        service = new TokenizationService(ideafyFactoryService, investmentSwapService,
-            tokenFactoryService, tokenizationRepository, offeringContractService,
-            blockchainProperties, jdbc);
+        service = new TokenizationService(blockchainService, ideafyFactoryService,
+            investmentSwapService, tokenFactoryService, tokenizationRepository,
+            offeringContractService, blockchainProperties, jdbc);
     }
 
     @Nested
@@ -80,6 +84,9 @@ class TokenizationServiceTest {
             when(ideafyFactoryService.launchProject(eq(PROYECTO_ID), anyInt(), anyInt(),
                 eq(TREASURY), anyString(), anyString(), any(BigInteger.class)))
                 .thenReturn(TOKEN_ADDR);
+            when(offeringContractService.registerOffering(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn("0xtxhash");
+            when(blockchainService.verifyTransaction("0xtxhash")).thenReturn(true);
 
             String result = service.crearTokenParaProyecto(PROYECTO_ID, "Mi Proyecto", "MP",
                 1000, new BigDecimal("10"), new BigDecimal("50000"),
@@ -88,7 +95,7 @@ class TokenizationServiceTest {
             assertThat(result).isEqualTo(TOKEN_ADDR);
             verify(tokenizationRepository).save(eq(PROYECTO_ID), anyString(), anyString(),
                 eq(1000), eq(new BigDecimal("10")), any(BigDecimal.class), eq(TOKEN_ADDR));
-            verify(offeringContractService).registerOffering(any(), any(), any(), any(), any(), any(), any());
+            verify(blockchainService).verifyTransaction("0xtxhash");
         }
 
         @Test
@@ -130,16 +137,18 @@ class TokenizationServiceTest {
         }
 
         @Test
-        void todosLosBlockchainFallan_usaDireccionCero() throws Exception {
+        void todosLosBlockchainFallan_lanzaConflictException() throws Exception {
             when(ideafyFactoryService.obtenerTokenDeProyecto(PROYECTO_ID)).thenThrow(new RuntimeException("Error1"));
             when(investmentSwapService.obtenerTokenDeProyecto(PROYECTO_ID)).thenThrow(new RuntimeException("Error2"));
             when(tokenFactoryService.crearTokenProyecto(any(), anyString(), anyString(), any()))
                 .thenThrow(new RuntimeException("Error3"));
 
-            String result = service.crearTokenParaProyecto(PROYECTO_ID, "Cero", "C0",
-                100, BigDecimal.ONE, null, null);
+            assertThatThrownBy(() -> service.crearTokenParaProyecto(PROYECTO_ID, "Cero", "C0",
+                    100, BigDecimal.ONE, null, null))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No se pudo crear el token");
 
-            assertThat(result).isEqualTo("0x0000000000000000000000000000000000000000");
+            verify(tokenizationRepository, never()).save(any(), any(), any(), anyInt(), any(), any(), any());
         }
 
         @Test
@@ -245,6 +254,9 @@ class TokenizationServiceTest {
             when(ideafyFactoryService.obtenerTokenDeProyecto(PROYECTO_ID)).thenReturn(null);
             when(ideafyFactoryService.launchProject(any(), anyInt(), anyInt(), any(), any(), any(), any()))
                 .thenReturn(TOKEN_ADDR);
+            when(offeringContractService.registerOffering(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn("0xtxhash");
+            when(blockchainService.verifyTransaction("0xtxhash")).thenReturn(true);
             when(tokenizationRepository.findByProjectId(PROYECTO_ID))
                 .thenReturn(Optional.of(Map.ofEntries(
                     Map.entry("id", 1L), Map.entry("proyecto_id", PROYECTO_ID),

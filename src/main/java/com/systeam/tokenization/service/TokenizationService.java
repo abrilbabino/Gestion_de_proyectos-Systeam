@@ -15,11 +15,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.InvestmentSwapService;
 import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.config.BlockchainProperties;
 import com.systeam.tokenization.service.TokenFactoryService;
+import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.dto.CreateTokenRequest;
 import com.systeam.tokenization.dto.TokenResponse;
@@ -30,6 +32,7 @@ public class TokenizationService {
 
     private static final Logger log = LoggerFactory.getLogger(TokenizationService.class);
 
+    private final BlockchainService blockchainService;
     private final IdeafyFactoryService ideafyFactoryService;
     private final InvestmentSwapService investmentSwapService;
     private final TokenFactoryService tokenFactoryService;
@@ -38,13 +41,15 @@ public class TokenizationService {
     private final BlockchainProperties blockchainProperties;
     private final JdbcTemplate jdbc;
 
-    public TokenizationService(IdeafyFactoryService ideafyFactoryService,
+    public TokenizationService(BlockchainService blockchainService,
+                               IdeafyFactoryService ideafyFactoryService,
                                InvestmentSwapService investmentSwapService,
                                TokenFactoryService tokenFactoryService,
                                TokenizationRepository tokenizationRepository,
                                OfferingContractService offeringContractService,
                                BlockchainProperties blockchainProperties,
                                JdbcTemplate jdbc) {
+        this.blockchainService = blockchainService;
         this.ideafyFactoryService = ideafyFactoryService;
         this.investmentSwapService = investmentSwapService;
         this.tokenFactoryService = tokenFactoryService;
@@ -72,6 +77,7 @@ public class TokenizationService {
         BigInteger supplyInicial = BigInteger.valueOf(supply);
 
         String contractAddress = null;
+        Exception lastError = null;
 
         // 1. Intentar con IdeafyFactory (contrato nuevo, upgradeable)
         if (contractAddress == null) {
@@ -86,12 +92,11 @@ public class TokenizationService {
                     );
                     log.info("Token creado via IdeafyFactory para proyecto {}: {} -> {}",
                         proyectoId, tokenSymbol, contractAddress);
-                    registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
                 } else {
                     log.info("Token ya existia en IdeafyFactory para proyecto {}: {}", proyectoId, contractAddress);
-                    registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
                 }
             } catch (Exception e) {
+                lastError = e;
                 log.warn("IdeafyFactory no disponible: {}. Probando InvestmentSwap.", e.getMessage());
             }
         }
@@ -111,12 +116,13 @@ public class TokenizationService {
                     log.info("Token ya existia en InvestmentSwap para proyecto {}: {}", proyectoId, contractAddress);
                 }
             } catch (Exception e) {
+                lastError = e;
                 log.warn("InvestmentSwap no disponible para proyecto {}: {}. Usando TokenFactory como fallback.",
                     proyectoId, e.getMessage());
             }
         }
 
-        // 3. Fallback a TokenFactory (último recurso legacy)
+        // 3. Fallback a TokenFactory (ultimo recurso legacy)
         if (contractAddress == null) {
             try {
                 contractAddress = tokenFactoryService.crearTokenProyecto(
@@ -125,14 +131,21 @@ public class TokenizationService {
                 log.info("Token creado via TokenFactory (fallback) para proyecto {}: {} -> {}",
                     proyectoId, tokenSymbol, contractAddress);
             } catch (Exception e2) {
-                log.error("Error creando token para proyecto {}: {}. Usando address cero.",
-                    proyectoId, e2.getMessage());
-                contractAddress = "0x0000000000000000000000000000000000000000";
+                lastError = e2;
+                log.error("Error creando token para proyecto {}: {}", proyectoId, e2.getMessage());
             }
         }
 
-        BigDecimal valorNominalFinal = valorNominal != null ? valorNominal : BigDecimal.ONE;
+        if (contractAddress == null) {
+            throw new ConflictException("No se pudo crear el token en ningun contrato blockchain. Causa: "
+                + (lastError != null ? lastError.getMessage() : "desconocida"));
+        }
 
+        // 4. Registrar offering on-chain (blockchain-first con verify)
+        registrarOffering(proyectoId, valorNominal, montoRequerido, plazo);
+
+        // 5. Guardar en DB solo si el offering se registro exitosamente
+        BigDecimal valorNominalFinal = valorNominal != null ? valorNominal : BigDecimal.ONE;
         tokenizationRepository.save(proyectoId, tokenName, tokenSymbol, supply, valorNominalFinal,
             new BigDecimal("0.50"), contractAddress);
 
@@ -261,26 +274,34 @@ public class TokenizationService {
             log.warn("registerOffering omitido para proyecto {}: falta valorNominal", proyectoId);
             return;
         }
+        String creator = blockchainProperties.getTreasuryAddress();
+        if (creator == null || creator.equals("0x0000000000000000000000000000000000000000")) {
+            log.warn("registerOffering omitido para proyecto {}: treasury no configurada", proyectoId);
+            return;
+        }
         try {
-            String creator = blockchainProperties.getTreasuryAddress();
-            if (creator == null || creator.equals("0x0000000000000000000000000000000000000000")) {
-                log.warn("registerOffering omitido para proyecto {}: treasury no configurada", proyectoId);
-                return;
-            }
             BigInteger softCap = montoRequerido.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
             BigInteger hardCap = softCap;
             BigInteger pricePerToken = valorNominal.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
             BigInteger startTime = BigInteger.valueOf(System.currentTimeMillis() / 1000);
             BigInteger endTime = BigInteger.valueOf(plazo.toEpochSecond(ZoneOffset.UTC));
 
-            offeringContractService.registerOffering(
+            String txHash = offeringContractService.registerOffering(
                 BigInteger.valueOf(proyectoId), creator,
                 softCap, hardCap, pricePerToken, startTime, endTime
             );
-            log.info("Offering registrada para proyecto {}: softCap={}, price={}, endTime={}",
-                proyectoId, softCap, pricePerToken, endTime);
+            log.info("Offering registrada para proyecto {}: txHash={}, softCap={}, price={}, endTime={}",
+                proyectoId, txHash, softCap, pricePerToken, endTime);
+
+            boolean confirmed = blockchainService.verifyTransaction(txHash);
+            if (!confirmed) {
+                throw new ConflictException("El registro de offering on-chain fallo (tx " + txHash + ")");
+            }
+            log.info("Offering confirmada en blockchain para proyecto {}", proyectoId);
+        } catch (ConflictException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Error registrando offering para proyecto {}: {}", proyectoId, e.getMessage());
+            throw new ConflictException("Error registrando offering en blockchain: " + e.getMessage());
         }
     }
 }

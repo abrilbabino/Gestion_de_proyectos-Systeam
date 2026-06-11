@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
@@ -24,10 +25,13 @@ public class DividendService {
 
     private final JdbcTemplate jdbc;
     private final DividendDistributorService dividendDistributorService;
+    private final BlockchainService blockchainService;
 
-    public DividendService(JdbcTemplate jdbc, DividendDistributorService dividendDistributorService) {
+    public DividendService(JdbcTemplate jdbc, DividendDistributorService dividendDistributorService,
+                           BlockchainService blockchainService) {
         this.jdbc = jdbc;
         this.dividendDistributorService = dividendDistributorService;
+        this.blockchainService = blockchainService;
     }
 
     @Transactional
@@ -47,7 +51,7 @@ public class DividendService {
             );
         }
 
-        // 1. Intentar distribuir on-chain via DividendDistributor
+        // Blockchain first — distribute on-chain and verify before saving in DB
         try {
             BigInteger montoWei = montoTotal
                 .multiply(new BigDecimal("1000000000000000000"))
@@ -55,13 +59,17 @@ public class DividendService {
             String txHash = dividendDistributorService.distribute(
                 BigInteger.valueOf(proyectoId), montoWei
             );
+            if (!verifyBlockchainTx(txHash)) {
+                throw new ConflictException("La distribucion de dividendos on-chain fallo en Sepolia");
+            }
             log.info("Dividendos distribuidos on-chain: proyecto={}, tx={}", proyectoId, txHash);
+        } catch (ConflictException e) {
+            throw e;
         } catch (Exception e) {
-            log.warn("DividendDistributor no disponible (on-chain): {}. " +
-                     "Guardando solo en DB.", e.getMessage());
+            throw new ConflictException("Error al distribuir dividendos on-chain: " + e.getMessage());
         }
 
-        // 2. Guardar en DB como registro histórico
+        // Save in DB as historical record
         Integer totalSubtokensColocados = jdbc.queryForObject(
             "SELECT COALESCE(SUM(pa.cantidad), 0) FROM portfolio_activos pa " +
             "JOIN subtokens s ON pa.subtoken_id = s.id WHERE s.proyecto_id = ?",
@@ -140,7 +148,7 @@ public class DividendService {
 
     @Transactional
     public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet) {
-        // 1. Intentar reclamar on-chain via DividendDistributor
+        // Blockchain first — claim on-chain and verify before updating DB
         if (wallet != null && !wallet.isBlank()) {
             try {
                 BigInteger claimable = dividendDistributorService.getClaimable(
@@ -150,15 +158,19 @@ public class DividendService {
                     String txHash = dividendDistributorService.claim(
                         BigInteger.valueOf(proyectoId)
                     );
+                    if (!verifyBlockchainTx(txHash)) {
+                        throw new ConflictException("El reclamo de dividendos on-chain fallo en Sepolia");
+                    }
                     log.info("Dividendos reclamados on-chain: proyecto={}, wallet={}, tx={}",
                         proyectoId, wallet, txHash);
                 } else {
                     log.info("No hay dividendos pendientes on-chain para proyecto={}, wallet={}",
                         proyectoId, wallet);
                 }
+            } catch (ConflictException e) {
+                throw e;
             } catch (Exception e) {
-                log.warn("DividendDistributor.claim() no disponible: {}. " +
-                         "Usando fallback DB.", e.getMessage());
+                throw new ConflictException("Error al reclamar dividendos on-chain: " + e.getMessage());
             }
         }
 
@@ -258,5 +270,14 @@ public class DividendService {
             ),
             usuarioId
         );
+    }
+
+    private boolean verifyBlockchainTx(String txHash) {
+        try {
+            return blockchainService.verifyTransaction(txHash);
+        } catch (Exception e) {
+            log.error("Error verificando tx {}: {}", txHash, e.getMessage());
+            return false;
+        }
     }
 }

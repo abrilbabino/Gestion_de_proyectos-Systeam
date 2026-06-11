@@ -32,8 +32,6 @@ import com.systeam.investment.dto.ValidateInvestmentResponse;
 import com.systeam.investment.repository.InvestmentRepository;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
-import com.systeam.blockchain.service.InvestmentSwapService;
-import com.systeam.config.BlockchainProperties;
 import com.systeam.investment.service.SmartContractService;
 import com.systeam.shared.model.Inversion;
 import com.systeam.shared.model.Proyecto;
@@ -60,12 +58,6 @@ class InvestmentServiceTest {
     @Mock
     private DynamicPricingService dynamicPricingService;
 
-    @Mock
-    private InvestmentSwapService investmentSwapService;
-
-    @Mock
-    private BlockchainProperties blockchainProperties;
-
     @InjectMocks
     private InvestmentService investmentService;
 
@@ -84,7 +76,6 @@ class InvestmentServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        when(blockchainProperties.getTreasuryAddress()).thenReturn("0x7eEA865D2f47B5cC0fF4c8967C1cCf667fEBE50A");
         when(dynamicPricingService.calcularPrecioFinanciamiento(any(), any(), any()))
             .thenReturn(new BigDecimal("10.00"));
 
@@ -241,14 +232,10 @@ class InvestmentServiceTest {
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
         when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
-        when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
-            .thenReturn(new BigDecimal("5000.00"));
-
-        when(investmentSwapService.invest(anyLong(), any(), any(), anyString()))
-            .thenReturn("0xabc-swap-inv-05");
-
         when(jdbc.queryForObject(anyString(), eq(Integer.class), anyString()))
             .thenReturn(0);
+
+        when(smartContractService.verifyTransaction(anyString())).thenReturn(true);
 
         when(jdbc.update(anyString(), any(), any())).thenReturn(1);
         when(jdbc.update(anyString(), any(), any(), any())).thenReturn(1);
@@ -276,7 +263,7 @@ class InvestmentServiceTest {
         assertThat(response.getEstado()).isEqualTo("CONFIRMADA");
         assertThat(response.getMontoIdea()).isEqualByComparingTo("500.00");
         assertThat(response.getSubTokensRecibidos()).isEqualTo(50);
-        assertThat(response.getTxHash()).startsWith("0xabc-swap-");
+        assertThat(response.getTxHash()).isEqualTo("0xdef456");
     }
 
     @Test
@@ -354,11 +341,11 @@ class InvestmentServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void createInvestment_cuandoSaldoInsuficiente_lanzaConflict() {
+    void createInvestment_cuandoTxInvalida_lanzaConflict() {
         CreateInvestmentRequest request = new CreateInvestmentRequest();
         request.setProyectoId(1L);
         request.setMontoIdea(new BigDecimal("500.00"));
-        request.setTxHash("0xdef456");
+        request.setTxHash("0xfake-tx");
 
         when(jdbc.query(anyString(), any(RowMapper.class), eq(1L)))
             .thenReturn(List.of(Map.of(
@@ -372,12 +359,14 @@ class InvestmentServiceTest {
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
         when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
-        when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(2L)))
-            .thenReturn(new BigDecimal("100.00"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), anyString()))
+            .thenReturn(0);
+
+        when(smartContractService.verifyTransaction(anyString())).thenReturn(false);
 
         assertThatThrownBy(() -> investmentService.createInvestment(request, 2L))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("Saldo insuficiente");
+                .hasMessageContaining("no fue encontrada");
     }
 
     @Test

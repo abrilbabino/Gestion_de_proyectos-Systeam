@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaMarketplaceService;
 import com.systeam.marketplace.dto.CreateListingRequest;
 import com.systeam.marketplace.dto.ListingResponse;
@@ -33,13 +34,16 @@ public class MarketplaceService {
     private final JdbcTemplate jdbc;
     private final IdeaMarketplaceService ideaMarketplaceService;
     private final SubtokenService subtokenService;
+    private final BlockchainService blockchainService;
 
     public MarketplaceService(JdbcTemplate jdbc,
                               IdeaMarketplaceService ideaMarketplaceService,
-                              SubtokenService subtokenService) {
+                              SubtokenService subtokenService,
+                              BlockchainService blockchainService) {
         this.jdbc = jdbc;
         this.ideaMarketplaceService = ideaMarketplaceService;
         this.subtokenService = subtokenService;
+        this.blockchainService = blockchainService;
     }
 
     @Transactional
@@ -66,21 +70,28 @@ public class MarketplaceService {
             throw new ConflictException("No tienes suficientes sub-tokens para vender");
         }
 
-        String txHash = null;
+        // Blockchain first — create listing on-chain and verify before updating DB
         try {
             String subtokenAddress = (String) subtoken.get("contract_address");
             if (subtokenAddress != null && !subtokenAddress.isBlank()) {
-                txHash = ideaMarketplaceService.listTokens(subtokenAddress, request.getCantidad(), request.getPrecioUnitario());
+                String txHash = ideaMarketplaceService.listTokens(subtokenAddress, request.getCantidad(), request.getPrecioUnitario());
+                if (!verifyBlockchainTx(txHash)) {
+                    throw new ConflictException("La transaccion blockchain de listado fallo en Sepolia");
+                }
+            } else {
+                throw new ConflictException("El sub-token no tiene direccion de contrato en Sepolia");
             }
+        } catch (ConflictException e) {
+            throw e;
         } catch (Exception e) {
-            log.warn("listTokens on-chain no disponible: {}", e.getMessage());
+            throw new ConflictException("Error al ejecutar la transaccion blockchain: " + e.getMessage());
         }
 
         Long listingId = jdbc.queryForObject("""
             INSERT INTO order_book (seller_id, subtoken_id, cantidad, cantidad_inicial, precio_unitario, estado, tx_hash, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, NOW(), NOW())
             RETURNING id
-            """, Long.class, sellerId, request.getSubtokenId(), request.getCantidad(), request.getCantidad(), request.getPrecioUnitario(), txHash);
+            """, Long.class, sellerId, request.getSubtokenId(), request.getCantidad(), request.getCantidad(), request.getPrecioUnitario(), null);
 
         jdbc.update("""
             UPDATE portfolio_activos SET cantidad = cantidad - ?, updated_at = NOW()
@@ -115,8 +126,7 @@ public class MarketplaceService {
 
         Map<String, Object> buyer = findUserOrThrow(buyerId);
         BigDecimal buyerBalance = (BigDecimal) buyer.get("saldo_idea");
-        
-        // El precio total siempre esta en Wei (18 decimales), lo convertimos a IDEA (unidad normal)
+
         BigDecimal WEI_CONVERSION = new BigDecimal("1000000000000000000");
         BigDecimal requiredIdea = new BigDecimal(totalPrice).divide(WEI_CONVERSION, 4, java.math.RoundingMode.HALF_UP);
 
@@ -126,6 +136,18 @@ public class MarketplaceService {
                 buyerBalance.stripTrailingZeros().toPlainString(),
                 requiredIdea.stripTrailingZeros().toPlainString()
             ));
+        }
+
+        // Blockchain first — send and verify before updating DB
+        try {
+            String txHash = ideaMarketplaceService.buyTokens(BigInteger.valueOf(listingId), cantidad);
+            if (!verifyBlockchainTx(txHash)) {
+                throw new ConflictException("La transaccion blockchain de compra fallo en Sepolia");
+            }
+        } catch (ConflictException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ConflictException("Error al ejecutar la transaccion blockchain: " + e.getMessage());
         }
 
         jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?", requiredIdea, buyerId);
@@ -138,12 +160,6 @@ public class MarketplaceService {
             jdbc.update("UPDATE order_book SET cantidad = 0, estado = 'EXECUTED', updated_at = NOW() WHERE id = ?", listingId);
         } else {
             jdbc.update("UPDATE order_book SET cantidad = ?, updated_at = NOW() WHERE id = ?", newCantidad, listingId);
-        }
-
-        try {
-            ideaMarketplaceService.buyTokens(BigInteger.valueOf(listingId), cantidad);
-        } catch (Exception e) {
-            log.warn("buyTokens on-chain no disponible: {}", e.getMessage());
         }
 
         log.info("MKT-03: Compra ejecutada listing={} buyer={} cantidad={} total={}", listingId, buyerId, cantidad, totalPrice);
@@ -161,18 +177,24 @@ public class MarketplaceService {
             throw new ConflictException("La orden ya no esta activa");
         }
 
+        // Blockchain first — send and verify before updating DB
+        try {
+            String txHash = ideaMarketplaceService.cancelListing(BigInteger.valueOf(listingId));
+            if (!verifyBlockchainTx(txHash)) {
+                throw new ConflictException("La transaccion blockchain de cancelacion fallo en Sepolia");
+            }
+        } catch (ConflictException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ConflictException("Error al ejecutar la transaccion blockchain: " + e.getMessage());
+        }
+
         BigInteger remaining = (BigInteger) listing.get("cantidad");
         Long subtokenId = ((Number) listing.get("subtoken_id")).longValue();
 
         jdbc.update("UPDATE order_book SET estado = 'CANCELLED', updated_at = NOW() WHERE id = ?", listingId);
 
         subtokenService.addPortfolioEntry(userId, subtokenId, remaining.intValue());
-
-        try {
-            ideaMarketplaceService.cancelListing(BigInteger.valueOf(listingId));
-        } catch (Exception e) {
-            log.warn("cancelListing on-chain no disponible: {}", e.getMessage());
-        }
 
         log.info("MKT-03: Listing cancelada id={} seller={}", listingId, userId);
     }
@@ -238,6 +260,15 @@ public class MarketplaceService {
             ORDER BY ob.precio_unitario ASC, ob.created_at ASC
             """;
         return jdbc.query(sql, new ListingRowMapper(), subtokenId);
+    }
+
+    private boolean verifyBlockchainTx(String txHash) {
+        try {
+            return blockchainService.verifyTransaction(txHash);
+        } catch (Exception e) {
+            log.error("Error verificando tx {}: {}", txHash, e.getMessage());
+            return false;
+        }
     }
 
     private Map<String, Object> findUserOrThrow(Long userId) {

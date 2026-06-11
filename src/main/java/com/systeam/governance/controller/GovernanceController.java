@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaGovernanceService;
 import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
@@ -28,11 +29,14 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/governance")
 public class GovernanceController {
 
+    private final BlockchainService blockchainService;
     private final IdeaGovernanceService onChainService;
     private final GovernanceService offChainService;
 
-    public GovernanceController(IdeaGovernanceService onChainService,
+    public GovernanceController(BlockchainService blockchainService,
+                                 IdeaGovernanceService onChainService,
                                  GovernanceService offChainService) {
+        this.blockchainService = blockchainService;
         this.onChainService = onChainService;
         this.offChainService = offChainService;
     }
@@ -48,6 +52,9 @@ public class GovernanceController {
                 request.getProposalType(),
                 request.getData() != null ? request.getData() : new byte[0]
             );
+            if (!blockchainService.verifyTransaction(txHash)) {
+                throw new RuntimeException("La transaccion de propuesta no se confirmo en blockchain");
+            }
             ProposalResponse saved = offChainService.createProposalOffChain(
                 request, user.userId(), null, txHash
             );
@@ -78,6 +85,9 @@ public class GovernanceController {
     public String executeProposal(@PathVariable Long id) {
         try {
             String txHash = onChainService.executeProposal(BigInteger.valueOf(id));
+            if (!blockchainService.verifyTransaction(txHash)) {
+                throw new RuntimeException("La transaccion de ejecucion no se confirmo en blockchain");
+            }
             offChainService.markExecuted(id, java.time.LocalDateTime.now());
             return txHash;
         } catch (Exception e) {

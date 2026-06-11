@@ -140,7 +140,7 @@ class ProjectServiceTest {
 
         assertThatThrownBy(() -> projectService.updateProject(1L, request))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("preparacion");
+                .hasMessageContaining("FINANCIAMIENTO");
     }
 
     @Test

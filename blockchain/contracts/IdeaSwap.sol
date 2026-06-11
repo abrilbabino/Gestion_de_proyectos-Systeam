@@ -13,9 +13,13 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
     IERC20 public immutable idea;
     IERC20 public immutable usdc;
 
-    uint256 public feeBps = 100;
+    address public treasury;
+    uint256 public feeBps = 5;
     uint256 public ideaReserve;
     uint256 public usdcReserve;
+
+    mapping(address => uint256) public lpIdeaBalance;
+    mapping(address => uint256) public lpUsdcBalance;
 
     event Swapped(
         address indexed user,
@@ -25,6 +29,8 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
     );
     event LiquidityAdded(uint256 ideaAmount, uint256 usdcAmount);
     event LiquidityRemoved(uint256 ideaAmount, uint256 usdcAmount);
+    event FeesCollected(uint256 ideaAmount, uint256 usdcAmount);
+    event TreasurySet(address indexed treasury);
 
     constructor(address _idea, address _usdc) {
         require(_idea != address(0), "Swap: invalid IDEA");
@@ -34,6 +40,13 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
         _grantRole(LIQUIDITY_PROVIDER_ROLE, msg.sender);
+        treasury = msg.sender;
+    }
+
+    function setTreasury(address _treasury) external onlyRole(ADMIN_ROLE) {
+        require(_treasury != address(0), "Swap: invalid treasury");
+        treasury = _treasury;
+        emit TreasurySet(_treasury);
     }
 
     function addLiquidity(uint256 ideaAmount, uint256 usdcAmount)
@@ -47,11 +60,13 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
             require(idea.transferFrom(msg.sender, address(this), ideaAmount),
                 "Swap: IDEA transfer failed");
             ideaReserve += ideaAmount;
+            lpIdeaBalance[msg.sender] += ideaAmount;
         }
         if (usdcAmount > 0) {
             require(usdc.transferFrom(msg.sender, address(this), usdcAmount),
                 "Swap: USDC transfer failed");
             usdcReserve += usdcAmount;
+            lpUsdcBalance[msg.sender] += usdcAmount;
         }
 
         emit LiquidityAdded(ideaAmount, usdcAmount);
@@ -63,11 +78,15 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
         nonReentrant
     {
         require(ideaAmount > 0 || usdcAmount > 0, "Swap: amounts > 0");
-        require(ideaReserve >= ideaAmount, "Swap: insufficient IDEA");
-        require(usdcReserve >= usdcAmount, "Swap: insufficient USDC");
+        require(lpIdeaBalance[msg.sender] >= ideaAmount, "Swap: exceed IDEA balance");
+        require(lpUsdcBalance[msg.sender] >= usdcAmount, "Swap: exceed USDC balance");
+        require(ideaReserve >= ideaAmount, "Swap: insufficient IDEA reserve");
+        require(usdcReserve >= usdcAmount, "Swap: insufficient USDC reserve");
 
         ideaReserve -= ideaAmount;
         usdcReserve -= usdcAmount;
+        lpIdeaBalance[msg.sender] -= ideaAmount;
+        lpUsdcBalance[msg.sender] -= usdcAmount;
 
         if (ideaAmount > 0) {
             require(idea.transfer(msg.sender, ideaAmount), "Swap: IDEA transfer failed");
@@ -133,5 +152,24 @@ contract IdeaSwap is AccessControl, ReentrancyGuard {
     function updateFee(uint256 newFeeBps) external onlyRole(ADMIN_ROLE) {
         require(newFeeBps <= 1000, "Swap: fee max 10%");
         feeBps = newFeeBps;
+    }
+
+    function collectFees() external onlyRole(ADMIN_ROLE) {
+        require(treasury != address(0), "Swap: treasury not set");
+
+        uint256 ideaBalance = idea.balanceOf(address(this));
+        uint256 usdcBalance = usdc.balanceOf(address(this));
+
+        uint256 ideaFees = ideaBalance > ideaReserve ? ideaBalance - ideaReserve : 0;
+        uint256 usdcFees = usdcBalance > usdcReserve ? usdcBalance - usdcReserve : 0;
+
+        if (ideaFees > 0) {
+            require(idea.transfer(treasury, ideaFees), "Swap: IDEA fee transfer failed");
+        }
+        if (usdcFees > 0) {
+            require(usdc.transfer(treasury, usdcFees), "Swap: USDC fee transfer failed");
+        }
+
+        emit FeesCollected(ideaFees, usdcFees);
     }
 }

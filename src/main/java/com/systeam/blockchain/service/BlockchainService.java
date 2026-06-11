@@ -104,6 +104,15 @@ public class BlockchainService {
         return executeWrite(props.getProjectTokenAddress(), fn);
     }
 
+    public String transferIdea(String to, BigInteger amountWei) throws Exception {
+        Function fn = new Function(
+            "transfer",
+            List.of(new Address(to), new Uint256(amountWei)),
+            List.of()
+        );
+        return executeWrite(props.getIdeaTokenAddress(), fn);
+    }
+
     public String payUSDC(BigInteger amountInUSDC, String actionId) throws Exception {
         byte[] padded = new byte[32];
         byte[] raw = actionId.getBytes();
@@ -117,9 +126,14 @@ public class BlockchainService {
     }
 
     public boolean verifyTransaction(String txHash) throws Exception {
-        var receipt = web3j.ethGetTransactionReceipt(txHash).send();
-        return receipt.getTransactionReceipt().isPresent()
-            && receipt.getTransactionReceipt().get().getStatus().equals("0x1");
+        for (int i = 0; i < 15; i++) {
+            var receipt = web3j.ethGetTransactionReceipt(txHash).send();
+            if (receipt.getTransactionReceipt().isPresent()) {
+                return receipt.getTransactionReceipt().get().getStatus().equals("0x1");
+            }
+            if (i < 14) Thread.sleep(2000);
+        }
+        return false;
     }
 
     public String getBackendAddress() {

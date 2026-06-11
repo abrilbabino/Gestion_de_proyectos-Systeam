@@ -11,6 +11,7 @@ contract SubToken is ERC20Upgradeable, UUPSUpgradeable {
     uint256 public dividendBps;
     address public creator;
     address public factory;
+    address public dividendDistributor;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -41,12 +42,28 @@ contract SubToken is ERC20Upgradeable, UUPSUpgradeable {
         _mint(_factory, supplyInicial);
     }
 
+    function setDividendDistributor(address _dd) external {
+        require(msg.sender == factory, "SubToken: only factory");
+        dividendDistributor = _dd;
+    }
+
     function burnFrom(address desde, uint256 cantidad) external {
         require(msg.sender == factory, "SubToken: only factory");
         _burn(desde, cantidad);
     }
 
+    function _update(address from, address to, uint256 amount) internal override {
+        if (from != address(0) && to != address(0) && dividendDistributor != address(0)) {
+            IDividendDistributor(dividendDistributor).onTransfer(proyectoId, from, to, amount);
+        }
+        super._update(from, to, amount);
+    }
+
     function _authorizeUpgrade(address newImplementation) internal override {
         require(msg.sender == factory, "SubToken: only factory can upgrade");
     }
+}
+
+interface IDividendDistributor {
+    function onTransfer(uint256 proyectoId, address from, address to, uint256 amount) external;
 }
