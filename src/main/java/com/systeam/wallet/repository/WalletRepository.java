@@ -22,6 +22,10 @@ public class WalletRepository {
         );
     }
 
+    public void updateSaldoIdea(Long userId, BigDecimal balance) {
+        jdbc.update("UPDATE users SET saldo_idea = ? WHERE id = ?", balance, userId);
+    }
+
     public BigDecimal findSaldoUsdt(Long userId) {
         return jdbc.queryForObject(
             "SELECT saldo_usdt FROM users WHERE id = ?",

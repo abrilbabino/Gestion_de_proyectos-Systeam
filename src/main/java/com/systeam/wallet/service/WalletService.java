@@ -20,6 +20,10 @@ public class WalletService {
         this.walletRepository = walletRepository;
     }
 
+    public void syncIdeaBalance(Long userId, BigDecimal balance) {
+        walletRepository.updateSaldoIdea(userId, balance);
+    }
+
     public WalletSummaryResponse getSummary(Long userId) {
         BigDecimal idea = walletRepository.findSaldoIdea(userId);
         BigDecimal usdt = walletRepository.findSaldoUsdt(userId);
