@@ -35,8 +35,9 @@ public class InvestmentController {
 
     @PostMapping("/validate")
     public ValidateInvestmentResponse validateInvestment(
-            @RequestBody @Valid ValidateInvestmentRequest request) {
-        return investmentService.validateInvestment(request);
+            @RequestBody @Valid ValidateInvestmentRequest request,
+            @AuthenticationPrincipal JwtPrincipal principal) {
+        return investmentService.validateInvestment(request, principal.userId());
     }
 
     @PostMapping

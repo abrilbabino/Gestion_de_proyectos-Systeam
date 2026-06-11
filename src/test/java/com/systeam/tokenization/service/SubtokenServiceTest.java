@@ -39,7 +39,7 @@ class SubtokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        subtokenService = new SubtokenService(jdbc, pricingService);
+        subtokenService = new SubtokenService(jdbc, pricingService, new BigDecimal("0.50"));
     }
 
     @Test

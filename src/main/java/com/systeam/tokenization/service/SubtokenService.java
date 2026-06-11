@@ -6,9 +6,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import com.systeam.project.exception.ConflictException;
 import com.systeam.tokenization.dto.SubtokenPriceResponse;
 
 @Service
@@ -16,10 +18,13 @@ public class SubtokenService {
 
     private final JdbcTemplate jdbc;
     private final DynamicPricingService pricingService;
+    private final BigDecimal maxOwnershipPercent;
 
-    public SubtokenService(JdbcTemplate jdbc, DynamicPricingService pricingService) {
+    public SubtokenService(JdbcTemplate jdbc, DynamicPricingService pricingService,
+                           @Value("${app.tokens.max-ownership-percent:0.50}") BigDecimal maxOwnershipPercent) {
         this.jdbc = jdbc;
         this.pricingService = pricingService;
+        this.maxOwnershipPercent = maxOwnershipPercent;
     }
 
     public Map<String, Object> findSubtokenByProject(Long proyectoId) {
@@ -155,9 +160,37 @@ public class SubtokenService {
         }
     }
 
-    public void updateQuotaAndPrice(Long subtokenId, int subTokens, BigDecimal nuevoPrecio) {
-        jdbc.update("UPDATE subtokens SET cupo_restante = cupo_restante - ?, precio_actual = ? WHERE id = ?",
-            subTokens, nuevoPrecio, subtokenId);
+    public void updateQuotaAndPrice(Long subtokenId, int amountDeducted, BigDecimal newPrice) {
+        jdbc.update(
+            "UPDATE subtokens SET cupo_restante = cupo_restante - ?, precio_actual = ?, updated_at = NOW() WHERE id = ?",
+            amountDeducted, newPrice, subtokenId
+        );
+    }
+
+    public void validateMaxOwnership(Long usuarioId, Long subtokenId, int cantidadAComprar) {
+        Integer suministroTotal = jdbc.queryForObject(
+            "SELECT suministro_total FROM subtokens WHERE id = ?", Integer.class, subtokenId
+        );
+
+        if (suministroTotal == null || suministroTotal <= 0) {
+            return;
+        }
+
+        Integer cantidadActual = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(cantidad), 0) FROM portfolio_activos WHERE usuario_id = ? AND subtoken_id = ?",
+            Integer.class, usuarioId, subtokenId
+        );
+        if (cantidadActual == null) cantidadActual = 0;
+
+        int maxPermitido = BigDecimal.valueOf(suministroTotal).multiply(maxOwnershipPercent).intValue();
+
+        if ((cantidadActual + cantidadAComprar) > maxPermitido) {
+            throw new ConflictException(
+                "Has excedido el limite maximo de tenencia del " +
+                maxOwnershipPercent.multiply(new BigDecimal("100")).intValue() + "% (" + maxPermitido + " tokens) para este proyecto. " +
+                "Actualmente tienes " + cantidadActual + " y estas intentando comprar " + cantidadAComprar + "."
+            );
+        }
     }
 
     public void addPortfolioEntry(Long usuarioId, Long subtokenId, int cantidad) {

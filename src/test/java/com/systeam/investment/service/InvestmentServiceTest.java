@@ -116,7 +116,7 @@ class InvestmentServiceTest {
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(SUBTOKEN_EN_FINANCIAMIENTO);
         when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(), anyLong())).thenReturn(new BigDecimal("10.00"));
 
-        ValidateInvestmentResponse response = investmentService.validateInvestment(request);
+        ValidateInvestmentResponse response = investmentService.validateInvestment(request, 1L);
 
         assertThat(response.isValido()).isTrue();
         assertThat(response.getMensaje()).contains("valida");
@@ -140,7 +140,7 @@ class InvestmentServiceTest {
                 "montoRecaudado", new BigDecimal("0.00")
             )));
 
-        ValidateInvestmentResponse response = investmentService.validateInvestment(request);
+        ValidateInvestmentResponse response = investmentService.validateInvestment(request, 1L);
 
         assertThat(response.isValido()).isFalse();
         assertThat(response.getMensaje()).contains("no esta en estado de financiamiento");
@@ -164,7 +164,7 @@ class InvestmentServiceTest {
 
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(null);
 
-        ValidateInvestmentResponse response = investmentService.validateInvestment(request);
+        ValidateInvestmentResponse response = investmentService.validateInvestment(request, 1L);
 
         assertThat(response.isValido()).isFalse();
         assertThat(response.getMensaje()).contains("no tiene un subtoken");
@@ -191,7 +191,7 @@ class InvestmentServiceTest {
         when(subtokenService.findSubtokenByProject(1L)).thenReturn(subtokenSinCupo);
         when(subtokenService.calcularPrecio(any(), anyInt(), anyInt(), any(),anyLong())).thenReturn(new BigDecimal("10.00"));
 
-        ValidateInvestmentResponse response = investmentService.validateInvestment(request);
+        ValidateInvestmentResponse response = investmentService.validateInvestment(request, 1L);
 
         assertThat(response.isValido()).isFalse();
         assertThat(response.getMensaje()).contains("no tiene cupo disponible");
@@ -207,7 +207,7 @@ class InvestmentServiceTest {
         when(jdbc.query(anyString(), any(RowMapper.class), eq(99L)))
             .thenReturn(List.of());
 
-        assertThatThrownBy(() -> investmentService.validateInvestment(request))
+        assertThatThrownBy(() -> investmentService.validateInvestment(request, 1L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("99");
     }

@@ -138,6 +138,8 @@ public class MarketplaceService {
             ));
         }
 
+        subtokenService.validateMaxOwnership(buyerId, subtokenId, cantidad.intValue());
+
         // Blockchain first — send and verify before updating DB
         try {
             String txHash = ideaMarketplaceService.buyTokens(BigInteger.valueOf(listingId), cantidad);

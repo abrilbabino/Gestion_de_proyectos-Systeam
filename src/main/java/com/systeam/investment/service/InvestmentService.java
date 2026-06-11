@@ -52,7 +52,7 @@ public class InvestmentService {
         this.dynamicPricingService = dynamicPricingService;
     }
 
-    public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request) {
+    public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
         Map<String, Object> proyecto = findProjectRowOrThrow(request.getProyectoId());
         String estado = (String) proyecto.get("estado");
 
@@ -114,6 +114,18 @@ public class InvestmentService {
                     .build();
         }
 
+        try {
+            subtokenService.validateMaxOwnership(usuarioId, ((Number) subtoken.get("id")).longValue(), subTokensNecesarios);
+        } catch (ConflictException e) {
+            return ValidateInvestmentResponse.builder()
+                    .valido(false)
+                    .mensaje(e.getMessage())
+                    .cupoDisponible(cupoRestante)
+                    .precioSubtoken(precioSubtoken)
+                    .subTokensARecebir(subTokensNecesarios)
+                    .build();
+        }
+
         return ValidateInvestmentResponse.builder()
                 .valido(true)
                 .mensaje("Inversion valida")
@@ -160,6 +172,8 @@ public class InvestmentService {
         if (subTokens > cupoRestante) {
             throw new ConflictException("El monto solicitado supera el cupo disponible del proyecto");
         }
+
+        subtokenService.validateMaxOwnership(usuarioId, subtokenId, subTokens);
 
         String txHash = request.getTxHash();
 
