@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.systeam.project.dto.BoostProjectRequest;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -111,8 +112,9 @@ public class ProjectController {
     @PreAuthorize("hasAuthority('project:update')")
     public void boostProject(
             @PathVariable Long id,
+            @RequestBody @Valid BoostProjectRequest request,
             @AuthenticationPrincipal JwtPrincipal principal) {
-        boostService.boostProject(id, principal.userId());
+        boostService.boostProject(id, principal.userId(), request.getTxHash());
     }
 
     @PostMapping("/{id}/desboost")

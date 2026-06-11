@@ -158,7 +158,7 @@ class JdbcProjectRepositoryIntegrationTest {
         insertProject(1, 1, "Financing", "FINANCIAMIENTO", new BigDecimal("100"));
         insertProject(2, 1, "Preparing", "PREPARACION", new BigDecimal("200"));
 
-        Page<Proyecto> page = repository.findByFilters("FINANCIAMIENTO", null, PageRequest.of(0, 10));
+        Page<Proyecto> page = repository.findByFilters(List.of("FINANCIAMIENTO"), null, PageRequest.of(0, 10));
 
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().get(0).getTitulo()).isEqualTo("Financing");
@@ -181,7 +181,7 @@ class JdbcProjectRepositoryIntegrationTest {
         insertProject(2, 1, "Blockchain B", "PREPARACION", new BigDecimal("200"));
         insertProject(3, 1, "AI System", "FINANCIAMIENTO", new BigDecimal("300"));
 
-        Page<Proyecto> page = repository.findByFilters("FINANCIAMIENTO", "blockchain", PageRequest.of(0, 10));
+        Page<Proyecto> page = repository.findByFilters(List.of("FINANCIAMIENTO"), "blockchain", PageRequest.of(0, 10));
 
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().get(0).getTitulo()).isEqualTo("Blockchain A");

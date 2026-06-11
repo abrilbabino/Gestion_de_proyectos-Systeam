@@ -29,7 +29,7 @@ public class BoostService {
         this.smartContractService = smartContractService;
     }
 
-    public void boostProject(Long proyectoId, Long usuarioId) {
+    public void boostProject(Long proyectoId, Long usuarioId, String txHash) {
         String estado = jdbc.queryForObject(
             "SELECT estado FROM projects WHERE id = ? AND deleted_at IS NULL",
             String.class, proyectoId
@@ -39,29 +39,32 @@ public class BoostService {
             throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + proyectoId);
         }
 
-        BigDecimal saldo = jdbc.queryForObject(
-            "SELECT saldo_idea FROM users WHERE id = ?", BigDecimal.class, usuarioId
+        // Evitar ataque de replay (usar el mismo txHash dos veces)
+        Integer txHashCount = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM project_boosts WHERE tx_hash = ?", Integer.class, txHash
         );
-
-        if (saldo == null || saldo.compareTo(COSTO_BOOST) < 0) {
-            throw new ConflictException("Saldo insuficiente de tokens IDEA. Se necesitan " + COSTO_BOOST + " $IDEA");
+        if (txHashCount != null && txHashCount > 0) {
+            throw new ConflictException("La transaccion de boost ya fue registrada");
         }
 
-        // Blockchain first — send 100 IDEA to fee address and verify
-        Map<String, Object> result = smartContractService.boostProject();
-        if (!Boolean.TRUE.equals(result.get("success"))) {
-            throw new ConflictException("Error en boost on-chain: " + result.get("note"));
+        // Validar en blockchain (SmartContractService)
+        if (!smartContractService.verifyBoostTransfer(txHash)) {
+            throw new ConflictException("Error: La transaccion on-chain no fue encontrada o falló");
         }
 
-        executeBoostDbUpdate(proyectoId, usuarioId);
+        executeBoostDbUpdate(proyectoId, usuarioId, txHash);
 
-        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain. Monto sumado exitosamente.",
-                proyectoId, usuarioId, COSTO_BOOST);
+        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain mediante tx {}.",
+                proyectoId, usuarioId, COSTO_BOOST, txHash);
     }
 
     @Transactional
-    protected void executeBoostDbUpdate(Long proyectoId, Long usuarioId) {
-        jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?", COSTO_BOOST, usuarioId);
+    protected void executeBoostDbUpdate(Long proyectoId, Long usuarioId, String txHash) {
+        // Insertar registro inmutable de la compra del boost
+        jdbc.update("""
+            INSERT INTO project_boosts (proyecto_id, usuario_id, tx_hash, monto_gastado, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+            """, proyectoId, usuarioId, txHash, COSTO_BOOST);
 
         jdbc.update("""
             UPDATE projects SET es_destacado = TRUE, fecha_boost = NOW(),

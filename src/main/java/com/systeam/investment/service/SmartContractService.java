@@ -165,28 +165,14 @@ public class SmartContractService {
     private static final BigDecimal COSTO_BOOST_IDEA = new BigDecimal("100");
     private static final String BOOST_FEE_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
-    public Map<String, Object> boostProject() {
-        Map<String, Object> result = new HashMap<>();
+    public boolean verifyBoostTransfer(String txHash) {
         try {
-            BigInteger amountWei = COSTO_BOOST_IDEA.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
-            String txHash = blockchain.transferIdea(BOOST_FEE_ADDRESS, amountWei);
-            if (blockchain.verifyTransaction(txHash)) {
-                result.put("success", true);
-                result.put("txHash", txHash);
-                result.put("note", "Boost on-chain verificado en Sepolia");
-            } else {
-                log.warn("boostProject fallo en blockchain");
-                result.put("success", false);
-                result.put("txHash", txHash);
-                result.put("note", "Transaccion de boost no encontrada o fallida en Sepolia");
-            }
+            // Verify the transaction was successful on the blockchain
+            return blockchain.verifyTransaction(txHash);
         } catch (Exception e) {
-            log.error("Error boostProject: {}", e.getMessage());
-            result.put("success", false);
-            result.put("txHash", "0x0");
-            result.put("note", "Error en boost on-chain: " + e.getMessage());
+            log.error("Error verifyBoostTransfer: {}", e.getMessage());
+            return false;
         }
-        return result;
     }
 
     public Map<String, Object> deployInvestmentContract(Long proyectoId) {
