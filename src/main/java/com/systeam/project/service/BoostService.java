@@ -39,13 +39,6 @@ public class BoostService {
             throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + proyectoId);
         }
 
-        Boolean yaDestacado = jdbc.queryForObject(
-            "SELECT es_destacado FROM projects WHERE id = ?", Boolean.class, proyectoId
-        );
-        if (Boolean.TRUE.equals(yaDestacado)) {
-            throw new ConflictException("El proyecto ya está destacado");
-        }
-
         BigDecimal saldo = jdbc.queryForObject(
             "SELECT saldo_idea FROM users WHERE id = ?", BigDecimal.class, usuarioId
         );
@@ -62,8 +55,8 @@ public class BoostService {
 
         executeBoostDbUpdate(proyectoId, usuarioId);
 
-        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain. Vigencia: {} dias",
-                proyectoId, usuarioId, COSTO_BOOST, DIAS_VIGENCIA);
+        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain. Monto sumado exitosamente.",
+                proyectoId, usuarioId, COSTO_BOOST);
     }
 
     @Transactional
@@ -79,5 +72,10 @@ public class BoostService {
 
     public void desboostProject(Long proyectoId) {
         jdbc.update("UPDATE projects SET es_destacado = FALSE WHERE id = ? AND deleted_at IS NULL", proyectoId);
+    }
+
+    @Transactional
+    public int applyDecayToBoosts() {
+        return jdbc.update("UPDATE projects SET monto_boost = monto_boost * 0.90 WHERE monto_boost > 0 AND deleted_at IS NULL");
     }
 }

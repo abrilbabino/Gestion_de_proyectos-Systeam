@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Future;
 import lombok.Data;
 
 @Data
@@ -20,6 +21,7 @@ public class UpdateProjectRequest {
     @DecimalMin(value = "0.01", message = "El monto requerido debe ser mayor a cero")
     private BigDecimal montoRequerido;
 
+    @Future(message = "El plazo debe ser una fecha futura")
     private LocalDateTime plazo;
     private Boolean gobernanzaComunidad;
 

@@ -87,7 +87,13 @@ public class ProjectService {
 
             Proyecto saved = projectRepository.save(proyecto);
             if (request.getSimbolo() != null) {
-                jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", request.getSimbolo(), id);
+                String nuevoSimbolo = request.getSimbolo().toUpperCase();
+                Integer count = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM projects WHERE simbolo = ? AND id != ?", Integer.class, nuevoSimbolo, id);
+                if (count != null && count > 0) {
+                    throw new ConflictException("El simbolo '" + nuevoSimbolo + "' ya esta en uso por otro proyecto");
+                }
+                jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", nuevoSimbolo, id);
             }
             return toResponse(saved, obtenerSimbolo(id));
         }
@@ -118,14 +124,17 @@ public class ProjectService {
     }
 
     public Page<ProjectResponse> getPublicCatalog(String estado, String search, Pageable pageable) {
-        List<String> visibleEstados = List.of("PREPARACION", "FINANCIAMIENTO", "EJECUCION");
+        List<String> visibleEstados = List.of("PREPARACION", "FINANCIAMIENTO", "EJECUCION", "AUDITADO");
 
         if (estado != null && !estado.isBlank() && !visibleEstados.contains(estado.toUpperCase())) {
             return Page.empty(pageable);
         }
 
-        String estadoFiltro = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
-        return projectRepository.findByFilters(estadoFiltro, search, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
+        List<String> estadosFiltro = (estado != null && !estado.isBlank()) 
+            ? List.of(estado.toUpperCase()) 
+            : visibleEstados;
+            
+        return projectRepository.findByFilters(estadosFiltro, search, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
     public Page<ProjectResponse> getProjectsByCreator(Long creadorId, Pageable pageable) {
@@ -223,7 +232,8 @@ public class ProjectService {
     boolean isValidTransition(String from, String to) {
         return switch (from) {
             case "PREPARACION"   -> "EN_AUDITORIA".equals(to) || "CANCELADO".equals(to);
-            case "EN_AUDITORIA"  -> "FINANCIAMIENTO".equals(to) || "RECHAZADO".equals(to) || "CANCELADO".equals(to);
+            case "EN_AUDITORIA"  -> "AUDITADO".equals(to) || "RECHAZADO".equals(to) || "CANCELADO".equals(to);
+            case "AUDITADO"      -> "FINANCIAMIENTO".equals(to) || "CANCELADO".equals(to);
             case "FINANCIAMIENTO" -> "EJECUCION".equals(to) || "FINALIZADO".equals(to) || "CANCELADO".equals(to);
             case "EJECUCION"     -> "FINALIZADO".equals(to);
             default              -> false;  // RECHAZADO, CANCELADO, FINALIZADO are terminal

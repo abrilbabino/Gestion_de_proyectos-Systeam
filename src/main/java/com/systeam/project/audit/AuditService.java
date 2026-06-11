@@ -82,7 +82,7 @@ public class AuditService {
 
         // 5. Transition project state
         String newEstado = (request.getResultado() == ResultadoAuditoria.APROBADO)
-            ? "FINANCIAMIENTO"
+            ? "AUDITADO"
             : "RECHAZADO";
         projectService.updateProjectStatus(proyectoId, newEstado);
 

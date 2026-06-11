@@ -147,7 +147,7 @@ public class JdbcProjectRepository implements ProjectRepository {
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
             "es_destacado, fecha_boost, monto_boost, " +
-            "created_at, updated_at, deleted_at FROM projects WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "created_at, updated_at, deleted_at FROM projects WHERE deleted_at IS NULL ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, pageable.getPageSize(), pageable.getOffset()
         );
         return new PageImpl<>(list, pageable, total != null ? total : 0L);
@@ -163,20 +163,25 @@ public class JdbcProjectRepository implements ProjectRepository {
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
             "es_destacado, fecha_boost, monto_boost, " +
-            "created_at, updated_at, deleted_at FROM projects WHERE creador_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "created_at, updated_at, deleted_at FROM projects WHERE creador_id = ? AND deleted_at IS NULL ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, creadorId, pageable.getPageSize(), pageable.getOffset()
         );
         return new PageImpl<>(list, pageable, total != null ? total : 0L);
     }
 
     @Override
-    public Page<Proyecto> findByFilters(String estado, String search, Pageable pageable) {
+    public Page<Proyecto> findByFilters(List<String> estados, String search, Pageable pageable) {
         StringBuilder where = new StringBuilder("deleted_at IS NULL");
         List<Object> params = new ArrayList<>();
 
-        if (estado != null && !estado.isBlank()) {
-            where.append(" AND estado = ?");
-            params.add(estado);
+        if (estados != null && !estados.isEmpty()) {
+            where.append(" AND estado IN (");
+            for (int i = 0; i < estados.size(); i++) {
+                where.append("?");
+                if (i < estados.size() - 1) where.append(",");
+                params.add(estados.get(i));
+            }
+            where.append(")");
         }
         if (search != null && !search.isBlank()) {
             where.append(" AND (LOWER(titulo) LIKE LOWER(?) OR LOWER(descripcion) LIKE LOWER(?))");
@@ -196,7 +201,7 @@ public class JdbcProjectRepository implements ProjectRepository {
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
             "es_destacado, fecha_boost, monto_boost, " +
-            "created_at, updated_at, deleted_at FROM projects WHERE " + where + " ORDER BY es_destacado DESC, created_at DESC LIMIT ? OFFSET ?",
+            "created_at, updated_at, deleted_at FROM projects WHERE " + where + " ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, params.toArray()
         );
         return new PageImpl<>(list, pageable, total != null ? total : 0L);

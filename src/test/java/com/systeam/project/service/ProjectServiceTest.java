@@ -174,15 +174,13 @@ class ProjectServiceTest {
     }
 
     @Test
-    void updateProjectStatus_transicionEnAuditoriaAFinanciamiento() {
+    void updateProjectStatus_transicionEnAuditoriaAAuditado() {
         proyectoBase.setEstado("EN_AUDITORIA");
-        proyectoBase.setCupoMaximoTokens(1000);
-        proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
 
         when(projectRepository.findById(1L)).thenReturn(Optional.of(proyectoBase));
         when(projectRepository.save(any(Proyecto.class))).thenReturn(proyectoBase);
 
-        projectService.updateProjectStatus(1L, "FINANCIAMIENTO");
+        projectService.updateProjectStatus(1L, "AUDITADO");
 
         verify(projectRepository).save(any(Proyecto.class));
     }
@@ -211,8 +209,8 @@ class ProjectServiceTest {
     }
 
     @Test
-    void updateProjectStatus_transicionValidaPreparacionAFinanciamiento() throws Exception {
-        proyectoBase.setEstado("EN_AUDITORIA");
+    void updateProjectStatus_transicionValidaAuditadoAFinanciamiento() throws Exception {
+        proyectoBase.setEstado("AUDITADO");
         proyectoBase.setCupoMaximoTokens(1000);
         proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
 
@@ -264,8 +262,8 @@ class ProjectServiceTest {
 
     @Test
     void updateProjectStatus_financiamiento_asignaPlazoSiNoTiene() throws Exception {
-        // Must come from EN_AUDITORIA now (PREPARACION->FINANCIAMIENTO is no longer valid per HU-44)
-        proyectoBase.setEstado("EN_AUDITORIA");
+        // Must come from AUDITADO
+        proyectoBase.setEstado("AUDITADO");
         proyectoBase.setCupoMaximoTokens(1000);
         proyectoBase.setValorNominalToken(new BigDecimal("1.50"));
 

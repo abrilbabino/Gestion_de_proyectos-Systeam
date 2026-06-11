@@ -106,7 +106,7 @@ class AuditServiceTest {
 
         assertThat(response.getResultado()).isEqualTo("APROBADO");
         assertThat(response.getTxHash()).isEqualTo("0xABC");
-        verify(projectService).updateProjectStatus(PROYECTO_ID, "FINANCIAMIENTO");
+        verify(projectService).updateProjectStatus(PROYECTO_ID, "AUDITADO");
         verify(eventPublisher, never()).publishEvent(any());
     }
 

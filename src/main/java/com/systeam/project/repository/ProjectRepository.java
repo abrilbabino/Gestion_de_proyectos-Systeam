@@ -13,6 +13,6 @@ public interface ProjectRepository {
     Optional<Proyecto> findById(Long id);
     Page<Proyecto> findAll(Pageable pageable);
     Page<Proyecto> findByCreadorId(Long creadorId, Pageable pageable);
-    Page<Proyecto> findByFilters(String estado, String search, Pageable pageable);
+    Page<Proyecto> findByFilters(List<String> estados, String search, Pageable pageable);
     List<Proyecto> findProjectsInFinancing();
 }
