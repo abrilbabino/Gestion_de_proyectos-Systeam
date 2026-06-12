@@ -245,7 +245,7 @@ public class InvestmentService {
         subtokenService.addPortfolioEntry(usuarioId, subtokenId, subTokens);
 
         // Alocación on-chain (10^18)
-        String walletAddress = jdbc.queryForObject("SELECT wallet_address FROM users WHERE id = ?", String.class, usuarioId);
+        String walletAddress = smartContractService.getSenderFromTx(txHash);
         if (walletAddress != null && !walletAddress.isEmpty()) {
             try {
                 BigInteger amountOnChain = BigInteger.valueOf(subTokens).multiply(BigInteger.TEN.pow(18));

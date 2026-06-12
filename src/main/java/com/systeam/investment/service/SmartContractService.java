@@ -132,6 +132,15 @@ public class SmartContractService {
         }
     }
 
+    public String getSenderFromTx(String txHash) {
+        try {
+            return blockchain.getSenderFromTx(txHash);
+        } catch (Exception e) {
+            log.error("Error getting sender from tx {}: {}", txHash, e.getMessage());
+            return null;
+        }
+    }
+
     public Map<String, Object> refundInvestment(Long proyectoId, Long usuarioId, BigDecimal montoIdea) {
         Map<String, Object> result = new HashMap<>();
         try {

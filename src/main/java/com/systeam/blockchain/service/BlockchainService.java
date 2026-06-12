@@ -136,6 +136,14 @@ public class BlockchainService {
         return false;
     }
 
+    public String getSenderFromTx(String txHash) throws Exception {
+        var ethTx = web3j.ethGetTransactionByHash(txHash).send();
+        if (ethTx.getTransaction().isPresent()) {
+            return ethTx.getTransaction().get().getFrom();
+        }
+        return null;
+    }
+
     public String getBackendAddress() {
         return credentials.getAddress();
     }
