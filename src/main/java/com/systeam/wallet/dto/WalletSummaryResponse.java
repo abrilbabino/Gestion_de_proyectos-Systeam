@@ -29,5 +29,6 @@ public class WalletSummaryResponse {
         private Integer cantidad;
         private BigDecimal precioActual;
         private String contractAddress;
+        private String proyectoEstado;
     }
 }
