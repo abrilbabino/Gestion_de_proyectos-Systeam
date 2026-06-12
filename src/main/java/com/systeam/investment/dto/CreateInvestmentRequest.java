@@ -19,4 +19,7 @@ public class CreateInvestmentRequest {
 
     @NotBlank(message = "El hash de la transaccion blockchain es obligatorio")
     private String txHash;
+
+    @NotBlank(message = "La direccion de la billetera es obligatoria")
+    private String walletAddress;
 }
