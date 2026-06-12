@@ -16,6 +16,7 @@ public class InvestmentResponse {
     private String proyectoEstado;
     private BigDecimal montoIdea;
     private Integer subTokensRecibidos;
+    private BigDecimal precioSubtoken;
     private String txHash;
     private String estado;
     private LocalDateTime createdAt;

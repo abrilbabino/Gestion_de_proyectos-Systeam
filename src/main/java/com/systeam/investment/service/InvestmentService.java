@@ -442,6 +442,12 @@ public class InvestmentService {
     }
 
     private InvestmentResponse toResponse(Inversion inv, String proyectoTitulo, String proyectoEstado) {
+        BigDecimal precioSubtoken = null;
+        if (inv.getMontoIdea() != null && inv.getSubTokensRecibidos() != null && inv.getSubTokensRecibidos() > 0) {
+            precioSubtoken = inv.getMontoIdea()
+                .divide(BigDecimal.valueOf(inv.getSubTokensRecibidos()), 2, RoundingMode.HALF_UP);
+        }
+
         return InvestmentResponse.builder()
                 .id(inv.getId())
                 .usuarioId(inv.getUsuario() != null ? inv.getUsuario().getId() : null)
@@ -450,6 +456,7 @@ public class InvestmentService {
                 .proyectoEstado(proyectoEstado)
                 .montoIdea(inv.getMontoIdea())
                 .subTokensRecibidos(inv.getSubTokensRecibidos())
+                .precioSubtoken(precioSubtoken)
                 .txHash(inv.getTxHash())
                 .estado(inv.getEstado())
                 .createdAt(inv.getCreatedAt())
