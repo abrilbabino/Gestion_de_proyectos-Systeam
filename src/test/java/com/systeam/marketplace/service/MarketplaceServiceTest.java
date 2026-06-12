@@ -156,7 +156,7 @@ class MarketplaceServiceTest {
         when(jdbc.query(anyString(), any(RowMapper.class), eq(LISTING_ID)))
             .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD))
+        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD, "0xmocktx"))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Orden");
     }
@@ -165,7 +165,7 @@ class MarketplaceServiceTest {
     void buyFromListing_cuandoNoActiva_lanzaConflict() {
         mockFindListingOrThrow("CANCELLED", 50);
 
-        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD))
+        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("no esta activa");
     }
@@ -174,7 +174,7 @@ class MarketplaceServiceTest {
     void buyFromListing_cuandoSelfBuy_lanzaConflict() {
         mockFindListingOrThrow("ACTIVE", 50);
 
-        assertThatThrownBy(() -> service.buyFromListing(SELLER_ID, LISTING_ID, CANTIDAD))
+        assertThatThrownBy(() -> service.buyFromListing(SELLER_ID, LISTING_ID, CANTIDAD, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("tus propios");
     }
@@ -183,7 +183,7 @@ class MarketplaceServiceTest {
     void buyFromListing_cuandoExcedeDisponible_lanzaConflict() {
         mockFindListingOrThrow("ACTIVE", 5);
 
-        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD))
+        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("excede la disponible");
     }
@@ -194,7 +194,7 @@ class MarketplaceServiceTest {
         when(jdbc.query(argThat(s -> s != null && s.toString().contains("FROM users")), any(RowMapper.class), eq(BUYER_ID)))
             .thenReturn(List.of(Map.of("id", BUYER_ID, "nombre", "Buyer", "saldo_idea", BigDecimal.ONE)));
 
-        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD))
+        assertThatThrownBy(() -> service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("Saldo insuficiente");
     }
@@ -213,7 +213,7 @@ class MarketplaceServiceTest {
 
         mockGetListingById(LISTING_ID);
 
-        ListingResponse result = service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD);
+        ListingResponse result = service.buyFromListing(BUYER_ID, LISTING_ID, CANTIDAD, "0xbuytx");
 
         assertThat(result.getId()).isEqualTo(LISTING_ID);
         verify(jdbc).update(anyString(), any(), eq(BUYER_ID));
@@ -229,7 +229,7 @@ class MarketplaceServiceTest {
     void cancelListing_cuandoNoEsPropietario_lanzaConflict() {
         mockFindListingOrThrow("ACTIVE", 10);
 
-        assertThatThrownBy(() -> service.cancelListing(BUYER_ID, LISTING_ID))
+        assertThatThrownBy(() -> service.cancelListing(BUYER_ID, LISTING_ID, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("no te pertenece");
     }
@@ -238,7 +238,7 @@ class MarketplaceServiceTest {
     void cancelListing_cuandoYaNoEstaActiva_lanzaConflict() {
         mockFindListingOrThrow("EXECUTED", 10);
 
-        assertThatThrownBy(() -> service.cancelListing(SELLER_ID, LISTING_ID))
+        assertThatThrownBy(() -> service.cancelListing(SELLER_ID, LISTING_ID, "0xmocktx"))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("ya no esta activa");
     }
@@ -249,7 +249,7 @@ class MarketplaceServiceTest {
         when(ideaMarketplaceService.cancelListing(any())).thenReturn("0xcanceltx");
         when(blockchainService.verifyTransaction("0xcanceltx")).thenReturn(true);
 
-        service.cancelListing(SELLER_ID, LISTING_ID);
+        service.cancelListing(SELLER_ID, LISTING_ID, "0xcanceltx");
 
         verify(jdbc).update(anyString(), eq(LISTING_ID));
         verify(subtokenService).addPortfolioEntry(eq(SELLER_ID), eq(SUBTOKEN_ID), eq(10));
