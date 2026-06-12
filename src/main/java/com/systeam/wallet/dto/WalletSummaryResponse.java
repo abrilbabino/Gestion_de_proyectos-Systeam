@@ -28,5 +28,6 @@ public class WalletSummaryResponse {
         private String subtokenSimbolo;
         private Integer cantidad;
         private BigDecimal precioActual;
+        private String contractAddress;
     }
 }

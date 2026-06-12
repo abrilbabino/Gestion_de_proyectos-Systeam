@@ -76,6 +76,23 @@ public class IdeafyFactoryService {
         return decodeTokenAddressFromLogs(txHash);
     }
 
+    public String allocateTokens(Long proyectoId, String toAddress, BigInteger amount) throws Exception {
+        String factoryAddress = props.getIdeafyFactoryAddress();
+        assertConfigured(factoryAddress, "IdeafyFactory");
+
+        Function fn = new Function(
+            "allocateTokens",
+            List.of(
+                new Uint256(BigInteger.valueOf(proyectoId)),
+                new Address(toAddress),
+                new Uint256(amount)
+            ),
+            List.of()
+        );
+
+        return sendTransaction(factoryAddress, fn, BigInteger.valueOf(150_000L));
+    }
+
     public String obtenerTokenDeProyecto(Long proyectoId) throws Exception {
         String factoryAddress = props.getIdeafyFactoryAddress();
         assertConfigured(factoryAddress, "IdeafyFactory");

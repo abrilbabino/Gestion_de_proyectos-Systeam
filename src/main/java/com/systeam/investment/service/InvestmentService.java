@@ -28,6 +28,8 @@ import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.DynamicPricingService;
 import com.systeam.tokenization.service.SubtokenService;
+import com.systeam.blockchain.service.IdeafyFactoryService;
+import java.math.BigInteger;
 
 @Service
 public class InvestmentService {
@@ -39,17 +41,20 @@ public class InvestmentService {
     private final JdbcTemplate jdbc;
     private final SubtokenService subtokenService;
     private final DynamicPricingService dynamicPricingService;
+    private final IdeafyFactoryService ideafyFactoryService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
                              JdbcTemplate jdbc,
                              SubtokenService subtokenService,
-                             DynamicPricingService dynamicPricingService) {
+                             DynamicPricingService dynamicPricingService,
+                             IdeafyFactoryService ideafyFactoryService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.jdbc = jdbc;
         this.subtokenService = subtokenService;
         this.dynamicPricingService = dynamicPricingService;
+        this.ideafyFactoryService = ideafyFactoryService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
@@ -205,6 +210,19 @@ public class InvestmentService {
         subtokenService.updateQuotaAndPrice(subtokenId, subTokens, nuevoPrecio);
 
         subtokenService.addPortfolioEntry(usuarioId, subtokenId, subTokens);
+
+        // Alocación on-chain (10^18)
+        String walletAddress = jdbc.queryForObject("SELECT wallet_address FROM users WHERE id = ?", String.class, usuarioId);
+        if (walletAddress != null && !walletAddress.isEmpty()) {
+            try {
+                BigInteger amountOnChain = BigInteger.valueOf(subTokens).multiply(BigInteger.TEN.pow(18));
+                String allocateTx = ideafyFactoryService.allocateTokens(request.getProyectoId(), walletAddress, amountOnChain);
+                log.info("Tokens on-chain allocated for project {}: {}", request.getProyectoId(), allocateTx);
+            } catch (Exception e) {
+                log.error("Failed to allocate tokens on-chain for project {}: {}", request.getProyectoId(), e.getMessage());
+                throw new RuntimeException("Error al asignar tokens en la blockchain: " + e.getMessage());
+            }
+        }
 
         Usuario usuario = new Usuario();
         usuario.setId(usuarioId);

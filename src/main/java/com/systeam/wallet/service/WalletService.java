@@ -38,6 +38,7 @@ public class WalletService {
                     .subtokenSimbolo((String) row[3])
                     .cantidad((Integer) row[4])
                     .precioActual((BigDecimal) row[5])
+                    .contractAddress((String) row[6])
                     .build());
         }
 

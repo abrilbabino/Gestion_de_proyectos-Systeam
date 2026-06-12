@@ -74,7 +74,8 @@ public class TokenizationService {
             ? simbolo
             : "p" + proyectoId.toString().substring(0, Math.min(4, proyectoId.toString().length()));
         int supply = cupoMaximoTokens != null ? cupoMaximoTokens : 100000;
-        BigInteger supplyInicial = BigInteger.valueOf(supply);
+        // Multiplicar por 10^18 porque el contrato ERC20 usa 18 decimales.
+        BigInteger supplyInicial = BigInteger.valueOf(supply).multiply(BigInteger.TEN.pow(18));
 
         String contractAddress = null;
         Exception lastError = null;

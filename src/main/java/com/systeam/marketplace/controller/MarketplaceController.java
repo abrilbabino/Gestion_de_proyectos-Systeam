@@ -70,15 +70,17 @@ public class MarketplaceController {
     @PreAuthorize("isAuthenticated()")
     public ListingResponse buyFromListing(@PathVariable Long id,
                                            @RequestParam BigInteger cantidad,
+                                           @RequestParam String txHash,
                                            @AuthenticationPrincipal JwtPrincipal user) {
-        return marketplaceService.buyFromListing(user.userId(), id, cantidad);
+        return marketplaceService.buyFromListing(user.userId(), id, cantidad, txHash);
     }
 
     @PostMapping("/listings/{id}/cancel")
     @PreAuthorize("isAuthenticated()")
     public void cancelListing(@PathVariable Long id,
+                              @RequestParam String txHash,
                               @AuthenticationPrincipal JwtPrincipal user) {
-        marketplaceService.cancelListing(user.userId(), id);
+        marketplaceService.cancelListing(user.userId(), id, txHash);
     }
 
     @GetMapping("/quote")
