@@ -1,8 +1,12 @@
 package com.systeam.wallet.repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
+import com.systeam.wallet.dto.WalletHistoryItem;
+import java.sql.Timestamp;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -52,4 +56,54 @@ public class WalletRepository {
             userId
         );
     }
+    public List<WalletHistoryItem> findHistory(Long usuarioId, LocalDateTime desde, LocalDateTime hasta) {
+    String sql = """
+    SELECT * FROM (
+        SELECT 'COMPRA' AS tipo, monto_idea AS monto, sub_tokens_recibidos AS cantidad,
+               tx_hash, ('Inversion proyecto ' || (SELECT titulo FROM projects WHERE id = proyecto_id)) AS descripcion, created_at AS fecha
+        FROM investments WHERE usuario_id = ? AND estado = 'CONFIRMADA'
+
+        UNION ALL
+
+        SELECT 'DIVIDENDO' AS tipo, monto_recibido AS monto, cantidad_subtokens AS cantidad,
+               NULL AS tx_hash, 'Cobro de dividendos' AS descripcion, reclamado_en AS fecha
+        FROM reclamos_dividendos WHERE usuario_id = ?
+
+        UNION ALL
+
+        SELECT 'VENTA' AS tipo, (precio_unitario * (cantidad_inicial - cantidad)) AS monto,
+               (cantidad_inicial - cantidad) AS cantidad,
+               tx_hash, 'Venta de tokens' AS descripcion, updated_at AS fecha
+        FROM order_book WHERE seller_id = ? AND cantidad < cantidad_inicial
+    ) historial
+    WHERE 1=1
+    """;
+
+    List<Object> params = new ArrayList<>(List.of(
+        usuarioId, usuarioId, usuarioId
+    ));
+
+    if (desde != null) {
+        sql += " AND fecha >= ?";
+        params.add(Timestamp.valueOf(desde));
+    }
+    if (hasta != null) {
+        sql += " AND fecha <= ?";
+        params.add(Timestamp.valueOf(hasta));
+    }
+
+    sql += " ORDER BY fecha DESC";
+
+    return jdbc.query(sql,
+        (rs, rowNum) -> WalletHistoryItem.builder()
+            .tipo(rs.getString("tipo"))
+            .monto(rs.getBigDecimal("monto"))
+            .cantidad((Long) rs.getObject("cantidad"))
+            .txHash(rs.getString("tx_hash"))
+            .descripcion(rs.getString("descripcion"))
+            .fecha(rs.getTimestamp("fecha").toLocalDateTime())
+            .build(),
+        params.toArray()
+    );
+}
 }

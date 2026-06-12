@@ -1,8 +1,11 @@
 package com.systeam.wallet.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.systeam.wallet.dto.WalletHistoryItem;
+
 
 import org.springframework.stereotype.Service;
 
@@ -49,5 +52,9 @@ public class WalletService {
                         .build())
                 .portfolio(portfolio)
                 .build();
+    }
+
+    public List<WalletHistoryItem> getHistory(Long usuarioId, LocalDateTime desde, LocalDateTime hasta) {
+    return walletRepository.findHistory(usuarioId, desde, hasta);
     }
 }
