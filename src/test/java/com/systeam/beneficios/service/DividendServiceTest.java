@@ -101,7 +101,8 @@ class DividendServiceTest {
             when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(PROYECTO_ID)))
                 .thenReturn(10);
             when(jdbc.queryForObject(anyString(), eq(Long.class), eq(PROYECTO_ID),
-                eq(new BigDecimal("1000")), eq(new BigDecimal("100.0000"))))
+                eq(new BigDecimal("1000")), eq(new BigDecimal("100.0000")),
+                eq("0xdisttx")))
                 .thenReturn(42L);
 
             Long result = service.crearReparto(PROYECTO_ID, new BigDecimal("1000"));

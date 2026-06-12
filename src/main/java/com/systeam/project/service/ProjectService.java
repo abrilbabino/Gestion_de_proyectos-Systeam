@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.project.config.RubroConfig;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -62,6 +63,7 @@ public class ProjectService {
         proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad() != null ? request.getGobernanzaComunidad() : false);
         proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
         proyecto.setValorNominalToken(request.getValorNominalToken());
+        proyecto.setRubro(request.getRubro() != null ? request.getRubro() : RubroConfig.getRubroIdDefault());
 
         Proyecto saved = projectRepository.save(proyecto);
         jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", simbolo, saved.getId());
@@ -84,6 +86,7 @@ public class ProjectService {
             if (request.getGobernanzaComunidad() != null) proyecto.setGobernanzaComunidad(request.getGobernanzaComunidad());
             if (request.getCupoMaximoTokens() != null) proyecto.setCupoMaximoTokens(request.getCupoMaximoTokens());
             if (request.getValorNominalToken() != null) proyecto.setValorNominalToken(request.getValorNominalToken());
+            if (request.getRubro() != null) proyecto.setRubro(request.getRubro());
 
             Proyecto saved = projectRepository.save(proyecto);
             if (request.getSimbolo() != null) {
@@ -259,6 +262,7 @@ public class ProjectService {
                 .esDestacado(proyecto.getEsDestacado())
                 .fechaBoost(proyecto.getFechaBoost())
                 .montoBoost(proyecto.getMontoBoost())
+                .rubro(proyecto.getRubro())
                 .build();
     }
 }

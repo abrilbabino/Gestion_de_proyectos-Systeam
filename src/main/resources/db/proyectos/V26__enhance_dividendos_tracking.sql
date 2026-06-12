@@ -1,0 +1,5 @@
+ALTER TABLE dividendos
+    ADD COLUMN IF NOT EXISTS estado   VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    ADD COLUMN IF NOT EXISTS tx_hash  VARCHAR(66);
+
+CREATE INDEX IF NOT EXISTS idx_dividendos_estado ON dividendos(estado);

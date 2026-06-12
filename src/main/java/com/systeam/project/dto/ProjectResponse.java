@@ -26,4 +26,5 @@ public class ProjectResponse {
     private Boolean esDestacado;
     private LocalDateTime fechaBoost;
     private BigDecimal montoBoost;
+    private Integer rubro;
 }

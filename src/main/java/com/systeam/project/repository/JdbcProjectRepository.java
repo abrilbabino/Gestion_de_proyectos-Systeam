@@ -63,6 +63,8 @@ public class JdbcProjectRepository implements ProjectRepository {
         Timestamp deletedAt = rs.getTimestamp("deleted_at");
         if (deletedAt != null) p.setDeletedAt(deletedAt.toLocalDateTime());
 
+        p.setRubro(rs.getObject("rubro", Integer.class));
+
         p.setEsDestacado(rs.getBoolean("es_destacado"));
 
         Timestamp fechaBoost = rs.getTimestamp("fecha_boost");
@@ -81,8 +83,8 @@ public class JdbcProjectRepository implements ProjectRepository {
                 INSERT INTO projects (titulo, descripcion, monto_requerido, plazo, estado,
                     gobernanza_comunidad,
                     cupo_maximo_tokens, valor_nominal_token, monto_recaudado,
-                    creador_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                    creador_id, rubro, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 RETURNING id
                 """;
             Long id = jdbc.queryForObject(sql, Long.class,
@@ -95,7 +97,8 @@ public class JdbcProjectRepository implements ProjectRepository {
                 proyecto.getCupoMaximoTokens(),
                 proyecto.getValorNominalToken(),
                 proyecto.getMontoRecaudado(),
-                proyecto.getCreador().getId()
+                proyecto.getCreador().getId(),
+                proyecto.getRubro()
             );
             proyecto.setId(id);
         } else {
@@ -103,7 +106,7 @@ public class JdbcProjectRepository implements ProjectRepository {
                 UPDATE projects SET titulo=?, descripcion=?, monto_requerido=?, plazo=?,
                     estado=?, gobernanza_comunidad=?,
                     cupo_maximo_tokens=?, valor_nominal_token=?,
-                    monto_recaudado=?, updated_at=NOW()
+                    monto_recaudado=?, rubro=?, updated_at=NOW()
                 WHERE id=? AND deleted_at IS NULL
                 """;
             jdbc.update(sql,
@@ -116,6 +119,7 @@ public class JdbcProjectRepository implements ProjectRepository {
                 proyecto.getCupoMaximoTokens(),
                 proyecto.getValorNominalToken(),
                 proyecto.getMontoRecaudado(),
+                proyecto.getRubro(),
                 proyecto.getId()
             );
         }
@@ -128,7 +132,7 @@ public class JdbcProjectRepository implements ProjectRepository {
             Proyecto p = jdbc.queryForObject(
                 "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
                 "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
-                "es_destacado, fecha_boost, monto_boost, " +
+                "rubro, es_destacado, fecha_boost, monto_boost, " +
                 "created_at, updated_at, deleted_at FROM projects WHERE id = ? AND deleted_at IS NULL",
                 rowMapper, id
             );
@@ -146,7 +150,7 @@ public class JdbcProjectRepository implements ProjectRepository {
         List<Proyecto> list = jdbc.query(
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
-            "es_destacado, fecha_boost, monto_boost, " +
+            "rubro, es_destacado, fecha_boost, monto_boost, " +
             "created_at, updated_at, deleted_at FROM projects WHERE deleted_at IS NULL ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, pageable.getPageSize(), pageable.getOffset()
         );
@@ -162,7 +166,7 @@ public class JdbcProjectRepository implements ProjectRepository {
         List<Proyecto> list = jdbc.query(
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
-            "es_destacado, fecha_boost, monto_boost, " +
+            "rubro, es_destacado, fecha_boost, monto_boost, " +
             "created_at, updated_at, deleted_at FROM projects WHERE creador_id = ? AND deleted_at IS NULL ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, creadorId, pageable.getPageSize(), pageable.getOffset()
         );
@@ -200,7 +204,7 @@ public class JdbcProjectRepository implements ProjectRepository {
         List<Proyecto> list = jdbc.query(
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
-            "es_destacado, fecha_boost, monto_boost, " +
+            "rubro, es_destacado, fecha_boost, monto_boost, " +
             "created_at, updated_at, deleted_at FROM projects WHERE " + where + " ORDER BY monto_boost DESC, created_at DESC LIMIT ? OFFSET ?",
             rowMapper, params.toArray()
         );
@@ -212,7 +216,7 @@ public class JdbcProjectRepository implements ProjectRepository {
         return jdbc.query(
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
             "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
-            "es_destacado, fecha_boost, monto_boost, " +
+            "rubro, es_destacado, fecha_boost, monto_boost, " +
             "created_at, updated_at, deleted_at FROM projects WHERE estado = 'FINANCIAMIENTO' AND deleted_at IS NULL",
             rowMapper
         );

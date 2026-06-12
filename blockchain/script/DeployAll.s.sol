@@ -70,6 +70,11 @@ contract DeployAll is Script {
         DividendDistributor distributor = new DividendDistributor(address(ideaToken), address(factory));
         console.log("DividendDistributor: %s", address(distributor));
 
+        // 12. Grant ADMIN_ROLE to backend on DividendDistributor (so backend can call distribute())
+        bytes32 distributorAdminRole = distributor.ADMIN_ROLE();
+        distributor.grantRole(distributorAdminRole, backend);
+        console.log("  -> ADMIN_ROLE on DividendDistributor granted to %s", backend);
+
         vm.stopBroadcast();
 
         // ── Output .env block ─────────────────────────────────
@@ -90,5 +95,11 @@ contract DeployAll is Script {
         console.log("Factory has SubToken impl: %s", factory.subTokenImplementation() == address(subTokenImpl) ? "OK" : "FAIL");
         console.log("Backend has CREATOR_ROLE:  %s", factory.hasRole(creatorRole, backend) ? "OK" : "FAIL");
         console.log("Backend has ADMIN_ROLE:    %s", offering.hasRole(adminRole, backend) ? "OK" : "FAIL");
+        console.log("Backend has ADMIN_ROLE on DividendDistributor: %s", distributor.hasRole(distributorAdminRole, backend) ? "OK" : "FAIL");
+        console.log("");
+        console.log("=== POST-DEPLOY ===");
+        console.log("Para cada proyecto, ejecutar en el backend:");
+        console.log("  factory.setDividendDistributor(proyectoId, %s)", address(distributor));
+        console.log("Esto habilita el hook onTransfer() en cada SubToken.");
     }
 }

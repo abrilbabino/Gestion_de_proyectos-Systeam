@@ -21,6 +21,7 @@ import com.systeam.blockchain.service.InvestmentSwapService;
 import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.config.BlockchainProperties;
 import com.systeam.tokenization.service.TokenFactoryService;
+import com.systeam.project.config.RubroConfig;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.dto.CreateTokenRequest;
@@ -85,9 +86,11 @@ public class TokenizationService {
             try {
                 contractAddress = ideafyFactoryService.obtenerTokenDeProyecto(proyectoId);
                 if (contractAddress == null) {
+                    int rubroId = obtenerRubroProyecto(proyectoId);
+                    int dividendBps = RubroConfig.getDividendBps(rubroId);
                     String creator = blockchainProperties.getTreasuryAddress();
                     contractAddress = ideafyFactoryService.launchProject(
-                        proyectoId, 1, 4000,
+                        proyectoId, rubroId, dividendBps,
                         creator,
                         tokenName, tokenSymbol, supplyInicial
                     );
@@ -217,6 +220,16 @@ public class TokenizationService {
 
     public Page<TokenResponse> listarTokens(Pageable pageable) {
         return tokenizationRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    private int obtenerRubroProyecto(Long proyectoId) {
+        try {
+            Integer rubro = jdbc.queryForObject("SELECT rubro FROM projects WHERE id = ?", Integer.class, proyectoId);
+            return rubro != null ? rubro : RubroConfig.getRubroIdDefault();
+        } catch (Exception e) {
+            log.warn("No se pudo obtener rubro para proyecto {}: {}. Usando default.", proyectoId, e.getMessage());
+            return RubroConfig.getRubroIdDefault();
+        }
     }
 
     private String obtenerTituloProyecto(Long proyectoId) {

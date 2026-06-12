@@ -1,30 +1,39 @@
 package com.systeam.tokenization.service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.tokenization.dto.SubtokenPriceResponse;
 
 @Service
 public class SubtokenService {
 
+    private static final Logger log = LoggerFactory.getLogger(SubtokenService.class);
+
     private final JdbcTemplate jdbc;
     private final DynamicPricingService pricingService;
     private final BigDecimal maxOwnershipPercent;
+    private final OfferingContractService offeringContractService;
 
     public SubtokenService(JdbcTemplate jdbc, DynamicPricingService pricingService,
-                           @Value("${app.tokens.max-ownership-percent:0.50}") BigDecimal maxOwnershipPercent) {
+                           @Value("${app.tokens.max-ownership-percent:0.50}") BigDecimal maxOwnershipPercent,
+                           OfferingContractService offeringContractService) {
         this.jdbc = jdbc;
         this.pricingService = pricingService;
         this.maxOwnershipPercent = maxOwnershipPercent;
+        this.offeringContractService = offeringContractService;
     }
 
     public Map<String, Object> findSubtokenByProject(Long proyectoId) {
@@ -103,7 +112,14 @@ public class SubtokenService {
         BigDecimal sobreOferta;
 
         if ("FINANCIAMIENTO".equals(estado)) {
-            BigDecimal montoRecaudado = obtenerMontoRecaudado(proyectoId);
+            BigDecimal montoRecaudado;
+            try {
+                BigInteger totalWei = offeringContractService.getTotalInvested(BigInteger.valueOf(proyectoId));
+                montoRecaudado = new BigDecimal(totalWei).divide(BigDecimal.TEN.pow(18));
+            } catch (Exception e) {
+                log.warn("No se pudo leer totalInvested del contrato para proyecto {}: {}. Usando DB.", proyectoId, e.getMessage());
+                montoRecaudado = obtenerMontoRecaudado(proyectoId);
+            }
             BigDecimal montoRequerido = obtenerMontoRequerido(proyectoId);
             precio = pricingService.calcularPrecioFinanciamiento(
                 precioBase, montoRecaudado, montoRequerido

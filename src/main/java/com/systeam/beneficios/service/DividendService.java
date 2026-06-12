@@ -52,11 +52,12 @@ public class DividendService {
         }
 
         // Blockchain first — distribute on-chain and verify before saving in DB
+        String txHash;
         try {
             BigInteger montoWei = montoTotal
                 .multiply(new BigDecimal("1000000000000000000"))
                 .toBigInteger();
-            String txHash = dividendDistributorService.distribute(
+            txHash = dividendDistributorService.distribute(
                 BigInteger.valueOf(proyectoId), montoWei
             );
             if (!verifyBlockchainTx(txHash)) {
@@ -85,10 +86,10 @@ public class DividendService {
         );
 
         Long dividendoId = jdbc.queryForObject("""
-            INSERT INTO dividendos (proyecto_id, monto_total, monto_por_subtoken, fecha_reparto, created_at)
-            VALUES (?, ?, ?, NOW(), NOW())
+            INSERT INTO dividendos (proyecto_id, monto_total, monto_por_subtoken, estado, tx_hash, fecha_reparto, created_at)
+            VALUES (?, ?, ?, 'DISTRIBUIDO', ?, NOW(), NOW())
             RETURNING id
-            """, Long.class, proyectoId, montoTotal, montoPorSubtoken
+            """, Long.class, proyectoId, montoTotal, montoPorSubtoken, txHash
         );
 
         log.info("Reparto de dividendos creado: id={}, proyecto={}, total={}, porSubtoken={}",
@@ -136,12 +137,16 @@ public class DividendService {
         }
 
         BigDecimal montoFacturado = (BigDecimal) billing.get("montoFacturado");
+        // dividendBps es tasa anual (ej: 2000 = 20% anual). Dividimos /12 para tasa mensual.
         BigDecimal montoReparto = montoFacturado
             .multiply(dividendBps)
-            .divide(BigDecimal.valueOf(10000), 4, java.math.RoundingMode.HALF_UP);
+            .divide(BigDecimal.valueOf(10000), 4, java.math.RoundingMode.HALF_UP)
+            .divide(BigDecimal.valueOf(12), 4, java.math.RoundingMode.HALF_UP);
 
-        log.info("Reparto oracle: proyecto={}, montoFacturado={}, bps={}, montoReparto={}",
-            proyectoId, montoFacturado, dividendBps, montoReparto);
+        log.info("Reparto oracle: proyecto={}, montoFacturado={}, bps={} ({}% anual), montoReparto mensual={}",
+            proyectoId, montoFacturado, dividendBps,
+            dividendBps.divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP),
+            montoReparto);
 
         return crearReparto(proyectoId, montoReparto);
     }

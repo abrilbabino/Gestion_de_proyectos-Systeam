@@ -29,6 +29,7 @@ import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.DynamicPricingService;
 import com.systeam.tokenization.service.SubtokenService;
 import com.systeam.blockchain.service.IdeafyFactoryService;
+import com.systeam.blockchain.service.OfferingContractService;
 import java.math.BigInteger;
 
 @Service
@@ -42,19 +43,22 @@ public class InvestmentService {
     private final SubtokenService subtokenService;
     private final DynamicPricingService dynamicPricingService;
     private final IdeafyFactoryService ideafyFactoryService;
+    private final OfferingContractService offeringContractService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
                              JdbcTemplate jdbc,
                              SubtokenService subtokenService,
                              DynamicPricingService dynamicPricingService,
-                             IdeafyFactoryService ideafyFactoryService) {
+                             IdeafyFactoryService ideafyFactoryService,
+                             OfferingContractService offeringContractService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.jdbc = jdbc;
         this.subtokenService = subtokenService;
         this.dynamicPricingService = dynamicPricingService;
         this.ideafyFactoryService = ideafyFactoryService;
+        this.offeringContractService = offeringContractService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
@@ -79,8 +83,8 @@ public class InvestmentService {
         int cupoRestante = ((Number) subtoken.get("cupo_restante")).intValue();
         BigDecimal precioBase = (BigDecimal) subtoken.get("precio_base");
 
-        BigDecimal montoRecaudado = (BigDecimal) proyecto.get("montoRecaudado");
         BigDecimal montoRequerido = (BigDecimal) proyecto.get("montoRequerido");
+        BigDecimal montoRecaudado = obtenerMontoRecaudadoOnChain(request.getProyectoId());
         BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
             precioBase, montoRecaudado, montoRequerido
         );
@@ -107,6 +111,22 @@ public class InvestmentService {
                     .precioSubtoken(precioSubtoken)
                     .subTokensARecebir(0)
                     .build();
+        }
+
+        try {
+            BigInteger treasuryBalance = ideafyFactoryService.treasuryBalanceOfProject(request.getProyectoId());
+            BigInteger supply18 = BigInteger.valueOf(subTokensNecesarios).multiply(BigInteger.TEN.pow(18));
+            if (treasuryBalance.compareTo(supply18) < 0) {
+                return ValidateInvestmentResponse.builder()
+                        .valido(false)
+                        .mensaje("La tesoreria no dispone de suficientes sub-tokens on-chain para esta inversion")
+                        .cupoDisponible(cupoRestante)
+                        .precioSubtoken(precioSubtoken)
+                        .subTokensARecebir(0)
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo verificar balance on-chain del treasury: {}", e.getMessage());
         }
 
         if (subTokensNecesarios > cupoRestante) {
@@ -160,8 +180,10 @@ public class InvestmentService {
         int suministroTotal = (int) subtoken.get("suministro_total");
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
-        BigDecimal montoRecaudado = (BigDecimal) proyecto.get("montoRecaudado");
         BigDecimal montoRequerido = (BigDecimal) proyecto.get("montoRequerido");
+        BigDecimal montoRecaudado = obtenerMontoRecaudadoOnChainPreInvestment(
+            request.getProyectoId(), request.getMontoIdea()
+        );
         BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
             precioBase, montoRecaudado, montoRequerido
         );
@@ -172,6 +194,18 @@ public class InvestmentService {
 
         if (subTokens <= 0) {
             throw new ConflictException("El monto es insuficiente para recibir al menos 1 sub-token");
+        }
+
+        try {
+            BigInteger treasuryBalance = ideafyFactoryService.treasuryBalanceOfProject(request.getProyectoId());
+            BigInteger supply18 = BigInteger.valueOf(subTokens).multiply(BigInteger.TEN.pow(18));
+            if (treasuryBalance.compareTo(supply18) < 0) {
+                throw new ConflictException("La tesoreria no dispone de suficientes sub-tokens on-chain para esta inversion");
+            }
+        } catch (ConflictException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("No se pudo verificar balance on-chain del treasury: {}", e.getMessage());
         }
 
         if (subTokens > cupoRestante) {
@@ -196,16 +230,15 @@ public class InvestmentService {
         jdbc.update("UPDATE projects SET monto_recaudado = COALESCE(monto_recaudado, 0) + ? WHERE id = ?",
             request.getMontoIdea(), request.getProyectoId());
 
-        BigDecimal nuevoMontoRecaudado = montoRecaudado.add(request.getMontoIdea());
-        if (nuevoMontoRecaudado.compareTo(montoRequerido) >= 0) {
+        BigDecimal totalOnChain = obtenerMontoRecaudadoOnChain(request.getProyectoId());
+        if (totalOnChain.compareTo(montoRequerido) >= 0) {
             jdbc.update("UPDATE projects SET estado = 'EJECUCION', updated_at = NOW() WHERE id = ?",
                 request.getProyectoId());
             log.info("Project {} reached funding goal. Transitioned to EJECUCION.", request.getProyectoId());
         }
 
-        int nuevoCupo = cupoRestante - subTokens;
-        BigDecimal nuevoPrecio = subtokenService.calcularPrecio(
-            precioBase, suministroTotal, nuevoCupo, factorVolatilidad, request.getProyectoId()
+        BigDecimal nuevoPrecio = dynamicPricingService.calcularPrecioFinanciamiento(
+            precioBase, totalOnChain, montoRequerido
         );
         subtokenService.updateQuotaAndPrice(subtokenId, subTokens, nuevoPrecio);
 
@@ -360,6 +393,23 @@ public class InvestmentService {
             throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + projectId);
         }
         return results.get(0);
+    }
+
+    private BigDecimal obtenerMontoRecaudadoOnChain(Long proyectoId) {
+        try {
+            BigInteger totalWei = offeringContractService.getTotalInvested(BigInteger.valueOf(proyectoId));
+            return new BigDecimal(totalWei).divide(BigDecimal.TEN.pow(18));
+        } catch (Exception e) {
+            log.warn("No se pudo leer totalInvested del contrato para proyecto {}: {}. Usando DB.", proyectoId, e.getMessage());
+            Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
+            return (BigDecimal) proyecto.get("montoRecaudado");
+        }
+    }
+
+    private BigDecimal obtenerMontoRecaudadoOnChainPreInvestment(Long proyectoId, BigDecimal montoIdea) {
+        BigDecimal total = obtenerMontoRecaudadoOnChain(proyectoId);
+        BigDecimal monto = total.subtract(montoIdea);
+        return monto.compareTo(BigDecimal.ZERO) >= 0 ? monto : BigDecimal.ZERO;
     }
 
     private InvestmentResponse toResponse(Inversion inv) {

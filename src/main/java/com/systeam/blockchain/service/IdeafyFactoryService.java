@@ -113,6 +113,24 @@ public class IdeafyFactoryService {
         return null;
     }
 
+    public BigInteger treasuryBalanceOfProject(Long proyectoId) throws Exception {
+        String subTokenAddress = obtenerTokenDeProyecto(proyectoId);
+        if (subTokenAddress == null) return BigInteger.ZERO;
+        String factoryAddress = props.getIdeafyFactoryAddress();
+
+        Function fn = new Function(
+            "balanceOf",
+            List.of(new Address(factoryAddress)),
+            List.of(new TypeReference<Uint256>() {})
+        );
+
+        List<org.web3j.abi.datatypes.Type> result = executeCall(subTokenAddress, fn);
+        if (!result.isEmpty() && result.get(0) instanceof Uint256 balance) {
+            return balance.getValue();
+        }
+        return BigInteger.ZERO;
+    }
+
     public BigInteger getSubTokenCount() throws Exception {
         String factoryAddress = props.getIdeafyFactoryAddress();
         assertConfigured(factoryAddress, "IdeafyFactory");

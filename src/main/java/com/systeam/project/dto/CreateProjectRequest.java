@@ -43,4 +43,7 @@ public class CreateProjectRequest {
     @NotBlank(message = "El simbolo del token es obligatorio")
     @Size(min = 2, max = 5, message = "El simbolo debe tener entre 2 y 5 caracteres")
     private String simbolo;
+
+    @NotNull(message = "El rubro es obligatorio")
+    private Integer rubro;
 }

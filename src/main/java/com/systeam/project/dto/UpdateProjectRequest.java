@@ -33,4 +33,6 @@ public class UpdateProjectRequest {
 
     @Size(min = 2, max = 5, message = "El simbolo debe tener entre 2 y 5 caracteres")
     private String simbolo;
+
+    private Integer rubro;
 }

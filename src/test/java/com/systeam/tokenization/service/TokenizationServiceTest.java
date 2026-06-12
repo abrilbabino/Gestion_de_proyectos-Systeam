@@ -155,7 +155,7 @@ class TokenizationServiceTest {
         void cupoMaximoNull_usa100000() throws Exception {
             when(ideafyFactoryService.obtenerTokenDeProyecto(PROYECTO_ID)).thenReturn(null);
             when(ideafyFactoryService.launchProject(eq(PROYECTO_ID), anyInt(), anyInt(),
-                eq(TREASURY), anyString(), anyString(), eq(BigInteger.valueOf(100000))))
+                eq(TREASURY), anyString(), anyString(), eq(BigInteger.valueOf(100000).multiply(BigInteger.TEN.pow(18)))))
                 .thenReturn(TOKEN_ADDR);
 
             String result = service.crearTokenParaProyecto(PROYECTO_ID, "Sin cupo", "SC",

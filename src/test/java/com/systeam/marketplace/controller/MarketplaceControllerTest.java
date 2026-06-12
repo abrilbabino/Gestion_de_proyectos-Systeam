@@ -85,6 +85,7 @@ class MarketplaceControllerTest {
         request.setSubtokenId(1L);
         request.setCantidad(BigInteger.valueOf(10));
         request.setPrecioUnitario(BigInteger.valueOf(100));
+        request.setTxHash("0xtxhash");
 
         mockMvc.perform(post("/api/marketplace/listings")
                 .with(csrf())

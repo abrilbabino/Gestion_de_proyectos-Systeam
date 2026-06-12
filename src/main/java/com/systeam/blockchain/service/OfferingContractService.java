@@ -1,6 +1,7 @@
 package com.systeam.blockchain.service;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -10,6 +11,7 @@ import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
+import org.web3j.abi.datatypes.Bool;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.protocol.Web3j;
@@ -157,6 +159,34 @@ public class OfferingContractService {
 
         List<org.web3j.abi.datatypes.Type> result = executeCall(offeringAddress, fn);
         if (!result.isEmpty() && result.get(0) instanceof Uint256 val) {
+            return val.getValue();
+        }
+        return BigInteger.ZERO;
+    }
+
+    public BigInteger getTotalInvested(BigInteger proyectoId) throws Exception {
+        String offeringAddress = props.getOfferingContractAddress();
+        assertConfigured(offeringAddress, "OfferingContract");
+
+        Function fn = new Function(
+            "offerings",
+            List.of(new Uint256(proyectoId)),
+            Arrays.asList(
+                new TypeReference<Uint256>() {},
+                new TypeReference<Address>() {},
+                new TypeReference<Uint256>() {},
+                new TypeReference<Uint256>() {},
+                new TypeReference<Uint256>() {},
+                new TypeReference<Uint256>() {},
+                new TypeReference<Uint256>() {},
+                new TypeReference<Bool>() {},
+                new TypeReference<Bool>() {},
+                new TypeReference<Uint256>() {}
+            )
+        );
+
+        List<org.web3j.abi.datatypes.Type> result = executeCall(offeringAddress, fn);
+        if (result.size() >= 10 && result.get(9) instanceof Uint256 val) {
             return val.getValue();
         }
         return BigInteger.ZERO;

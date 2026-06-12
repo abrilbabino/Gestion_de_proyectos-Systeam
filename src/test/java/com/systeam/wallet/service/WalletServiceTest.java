@@ -40,8 +40,8 @@ class WalletServiceTest {
             when(walletRepository.findSaldoIdea(USER_ID)).thenReturn(new BigDecimal("500.00"));
             when(walletRepository.findSaldoUsdt(USER_ID)).thenReturn(new BigDecimal("1000.00"));
             when(walletRepository.findPortfolio(USER_ID)).thenReturn(List.<Object[]>of(
-                new Object[]{1L, "ProyectoA", "TokenA", "TKA", 10, new BigDecimal("50.00")},
-                new Object[]{2L, "ProyectoB", "TokenB", "TKB", 5, new BigDecimal("30.00")}
+                new Object[]{1L, "ProyectoA", "TokenA", "TKA", 10, new BigDecimal("50.00"), "0xaddr1"},
+                new Object[]{2L, "ProyectoB", "TokenB", "TKB", 5, new BigDecimal("30.00"), "0xaddr2"}
             ));
 
             WalletSummaryResponse result = service.getSummary(USER_ID);
@@ -108,7 +108,7 @@ class WalletServiceTest {
             when(walletRepository.findSaldoIdea(USER_ID)).thenReturn(BigDecimal.ZERO);
             when(walletRepository.findSaldoUsdt(USER_ID)).thenReturn(BigDecimal.ZERO);
             when(walletRepository.findPortfolio(USER_ID)).thenReturn(List.<Object[]>of(
-                new Object[]{1L, "ProyectoUnico", "UnicoToken", "UNI", 1, new BigDecimal("99.99")}
+                new Object[]{1L, "ProyectoUnico", "UnicoToken", "UNI", 1, new BigDecimal("99.99"), "0xaddr"}
             ));
 
             WalletSummaryResponse result = service.getSummary(USER_ID);

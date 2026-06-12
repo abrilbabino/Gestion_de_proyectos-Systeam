@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+import com.systeam.blockchain.service.OfferingContractService;
 import com.systeam.tokenization.dto.SubtokenPriceResponse;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +29,9 @@ class SubtokenServiceTest {
 
     @Mock
     private JdbcTemplate jdbc;
+
+    @Mock
+    private OfferingContractService offeringContractService;
 
     private final DynamicPricingService pricingService = new DynamicPricingService();
 
@@ -39,7 +43,7 @@ class SubtokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        subtokenService = new SubtokenService(jdbc, pricingService, new BigDecimal("0.50"));
+        subtokenService = new SubtokenService(jdbc, pricingService, new BigDecimal("0.50"), offeringContractService);
     }
 
     @Test
@@ -272,7 +276,7 @@ class SubtokenServiceTest {
 
         // Assert
         verify(jdbc).update(
-            eq("UPDATE subtokens SET cupo_restante = cupo_restante - ?, precio_actual = ? WHERE id = ?"),
+            eq("UPDATE subtokens SET cupo_restante = cupo_restante - ?, precio_actual = ?, updated_at = NOW() WHERE id = ?"),
             eq(50), eq(new BigDecimal("2.50")), eq(subtokenId)
         );
     }
