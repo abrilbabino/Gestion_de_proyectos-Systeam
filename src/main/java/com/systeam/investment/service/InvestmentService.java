@@ -181,9 +181,7 @@ public class InvestmentService {
         BigDecimal factorVolatilidad = (BigDecimal) subtoken.get("factor_volatilidad");
 
         BigDecimal montoRequerido = (BigDecimal) proyecto.get("montoRequerido");
-        BigDecimal montoRecaudado = obtenerMontoRecaudadoOnChainPreInvestment(
-            request.getProyectoId(), request.getMontoIdea()
-        );
+        BigDecimal montoRecaudado = obtenerMontoRecaudadoOnChain(request.getProyectoId());
         BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
             precioBase, montoRecaudado, montoRequerido
         );
@@ -398,12 +396,6 @@ public class InvestmentService {
     private BigDecimal obtenerMontoRecaudadoOnChain(Long proyectoId) {
         Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
         return (BigDecimal) proyecto.get("montoRecaudado");
-    }
-
-    private BigDecimal obtenerMontoRecaudadoOnChainPreInvestment(Long proyectoId, BigDecimal montoIdea) {
-        BigDecimal total = obtenerMontoRecaudadoOnChain(proyectoId);
-        BigDecimal monto = total.subtract(montoIdea);
-        return monto.compareTo(BigDecimal.ZERO) >= 0 ? monto : BigDecimal.ZERO;
     }
 
     private InvestmentResponse toResponse(Inversion inv) {

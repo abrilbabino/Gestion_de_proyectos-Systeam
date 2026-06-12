@@ -109,7 +109,7 @@ public class ProjectController {
 
     @PostMapping("/{id}/boost")
     @ResponseStatus(HttpStatus.OK)
-    @PreAuthorize("hasAuthority('project:update')")
+    @PreAuthorize("hasAuthority('investment:create') or hasAuthority('project:update')")
     public void boostProject(
             @PathVariable Long id,
             @RequestBody @Valid BoostProjectRequest request,
@@ -119,7 +119,7 @@ public class ProjectController {
 
     @PostMapping("/{id}/desboost")
     @ResponseStatus(HttpStatus.OK)
-    @PreAuthorize("hasAuthority('project:update')")
+    @PreAuthorize("hasAuthority('investment:create') or hasAuthority('project:update')")
     public void desboostProject(@PathVariable Long id) {
         boostService.desboostProject(id);
     }

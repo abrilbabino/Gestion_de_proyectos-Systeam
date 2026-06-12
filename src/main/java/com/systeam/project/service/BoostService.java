@@ -38,6 +38,9 @@ public class BoostService {
         if (estado == null) {
             throw new ResourceNotFoundException("Proyecto no encontrado con ID: " + proyectoId);
         }
+        if (!"FINANCIAMIENTO".equals(estado)) {
+            throw new ConflictException("Solo se pueden destacar proyectos que estan en estado FINANCIAMIENTO");
+        }
 
         // Evitar ataque de replay (usar el mismo txHash dos veces)
         Integer txHashCount = jdbc.queryForObject(

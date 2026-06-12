@@ -167,6 +167,14 @@ public class ProjectService {
         proyecto.setEstado(newEstado);
 
         if ("FINANCIAMIENTO".equals(newEstado)) {
+            if (proyecto.getValorNominalToken() != null && proyecto.getCupoMaximoTokens() != null) {
+                BigDecimal recaudacionMaxima = proyecto.getValorNominalToken()
+                    .multiply(BigDecimal.valueOf(proyecto.getCupoMaximoTokens()));
+                if (recaudacionMaxima.compareTo(proyecto.getMontoRequerido()) < 0) {
+                    throw new ConflictException("No se puede publicar el proyecto: el valor total de los subtokens (" + recaudacionMaxima + ") es menor a la meta de financiamiento (" + proyecto.getMontoRequerido() + ")");
+                }
+            }
+
             if (proyecto.getPlazo() == null) {
                 proyecto.setPlazo(LocalDateTime.now().plusDays(30));
             }
