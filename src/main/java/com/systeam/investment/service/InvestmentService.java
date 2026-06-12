@@ -396,14 +396,8 @@ public class InvestmentService {
     }
 
     private BigDecimal obtenerMontoRecaudadoOnChain(Long proyectoId) {
-        try {
-            BigInteger totalWei = offeringContractService.getTotalInvested(BigInteger.valueOf(proyectoId));
-            return new BigDecimal(totalWei).divide(BigDecimal.TEN.pow(18));
-        } catch (Exception e) {
-            log.warn("No se pudo leer totalInvested del contrato para proyecto {}: {}. Usando DB.", proyectoId, e.getMessage());
-            Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
-            return (BigDecimal) proyecto.get("montoRecaudado");
-        }
+        Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
+        return (BigDecimal) proyecto.get("montoRecaudado");
     }
 
     private BigDecimal obtenerMontoRecaudadoOnChainPreInvestment(Long proyectoId, BigDecimal montoIdea) {

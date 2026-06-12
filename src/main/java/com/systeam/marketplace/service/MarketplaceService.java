@@ -51,6 +51,14 @@ public class MarketplaceService {
         Map<String, Object> seller = findUserOrThrow(sellerId);
         Map<String, Object> subtoken = findSubtokenOrThrow(request.getSubtokenId());
 
+        String projectState = jdbc.queryForObject(
+            "SELECT p.estado FROM projects p JOIN subtokens s ON s.proyecto_id = p.id WHERE s.id = ?",
+            String.class, request.getSubtokenId()
+        );
+        if (!"EJECUCION".equals(projectState) && !"FINALIZADO".equals(projectState)) {
+            throw new ConflictException("Solo se pueden vender tokens de proyectos en Ejecución o Finalizados");
+        }
+
         BigDecimal precioBase = jdbc.queryForObject(
             "SELECT precio_base FROM subtokens WHERE id = ?", BigDecimal.class, request.getSubtokenId()
         );
