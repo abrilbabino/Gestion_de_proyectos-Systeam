@@ -42,6 +42,7 @@ public class WalletService {
                     .cantidad((Integer) row[4])
                     .precioActual((BigDecimal) row[5])
                     .contractAddress((String) row[6])
+                    .proyectoEstado((String) row[7])
                     .build());
         }
 
