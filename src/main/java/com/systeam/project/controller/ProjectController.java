@@ -117,13 +117,6 @@ public class ProjectController {
         boostService.boostProject(id, principal.userId(), request.getTxHash());
     }
 
-    @PostMapping("/{id}/desboost")
-    @ResponseStatus(HttpStatus.OK)
-    @PreAuthorize("hasAuthority('investment:create') or hasAuthority('project:update')")
-    public void desboostProject(@PathVariable Long id) {
-        boostService.desboostProject(id);
-    }
-
     @PostMapping("/evaluate-states")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('ADMIN')")

@@ -76,10 +76,6 @@ public class BoostService {
             """, COSTO_BOOST, proyectoId);
     }
 
-    public void desboostProject(Long proyectoId) {
-        jdbc.update("UPDATE projects SET es_destacado = FALSE WHERE id = ? AND deleted_at IS NULL", proyectoId);
-    }
-
     @Transactional
     public int applyDecayToBoosts() {
         return jdbc.update("UPDATE projects SET monto_boost = monto_boost * 0.90 WHERE monto_boost > 0 AND deleted_at IS NULL");

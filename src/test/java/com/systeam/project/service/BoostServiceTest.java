@@ -118,19 +118,4 @@ class BoostServiceTest {
             );
         }
     }
-
-    @Nested
-    @DisplayName("desboostProject")
-    class DesboostProject {
-
-        @Test
-        void ejecutaDesboostCorrectamente() {
-            service.desboostProject(PROYECTO_ID);
-
-            verify(jdbc).update(
-                argThat(sql -> sql != null && sql.toString().contains("UPDATE projects SET es_destacado = FALSE")),
-                eq(PROYECTO_ID)
-            );
-        }
-    }
 }
