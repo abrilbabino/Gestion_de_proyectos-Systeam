@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.wallet.dto.WalletSummaryResponse;
 import com.systeam.wallet.repository.WalletRepository;
 
@@ -24,11 +25,14 @@ class WalletServiceTest {
     @Mock
     private WalletRepository walletRepository;
 
+    @Mock
+    private BlockchainService blockchainService;
+
     private WalletService service;
 
     @BeforeEach
     void setUp() {
-        service = new WalletService(walletRepository);
+        service = new WalletService(walletRepository, blockchainService);
     }
 
     @Nested
@@ -40,8 +44,8 @@ class WalletServiceTest {
             when(walletRepository.findSaldoIdea(USER_ID)).thenReturn(new BigDecimal("500.00"));
             when(walletRepository.findSaldoUsdt(USER_ID)).thenReturn(new BigDecimal("1000.00"));
             when(walletRepository.findPortfolio(USER_ID)).thenReturn(List.<Object[]>of(
-                new Object[]{1L, "ProyectoA", "TokenA", "TKA", 10, new BigDecimal("50.00"), "0xaddr1"},
-                new Object[]{2L, "ProyectoB", "TokenB", "TKB", 5, new BigDecimal("30.00"), "0xaddr2"}
+                new Object[]{1L, "ProyectoA", "TokenA", "TKA", 10, new BigDecimal("50.00"), "0xaddr1", "ACTIVO"},
+                new Object[]{2L, "ProyectoB", "TokenB", "TKB", 5, new BigDecimal("30.00"), "0xaddr2", "ACTIVO"}
             ));
 
             WalletSummaryResponse result = service.getSummary(USER_ID);
@@ -108,7 +112,7 @@ class WalletServiceTest {
             when(walletRepository.findSaldoIdea(USER_ID)).thenReturn(BigDecimal.ZERO);
             when(walletRepository.findSaldoUsdt(USER_ID)).thenReturn(BigDecimal.ZERO);
             when(walletRepository.findPortfolio(USER_ID)).thenReturn(List.<Object[]>of(
-                new Object[]{1L, "ProyectoUnico", "UnicoToken", "UNI", 1, new BigDecimal("99.99"), "0xaddr"}
+                new Object[]{1L, "ProyectoUnico", "UnicoToken", "UNI", 1, new BigDecimal("99.99"), "0xaddr", "ACTIVO"}
             ));
 
             WalletSummaryResponse result = service.getSummary(USER_ID);
