@@ -5,12 +5,14 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.systeam.beneficios.service.DividendService;
 import com.systeam.project.exception.OracleBillingNotFoundException;
 
+@EnableScheduling
 @Component
 public class DividendScheduler {
 
@@ -24,7 +26,9 @@ public class DividendScheduler {
         this.jdbc = jdbc;
     }
 
-    @Scheduled(cron = "0 0 2 1 * ?")
+    // Ejecuta cada 1 minuto para facilitar las pruebas durante la presentación del integrador
+    // (Producción original: "0 0 2 1 * ?" -> el día 1 de cada mes a las 2:00 AM)
+    @Scheduled(cron = "0 * * * * ?")
     public void distributeMonthlyDividends() {
         log.info("Iniciando distribucion mensual de dividendos...");
 
@@ -34,7 +38,7 @@ public class DividendScheduler {
             " AND NOT EXISTS (" +
             "   SELECT 1 FROM dividendos d" +
             "   WHERE d.proyecto_id = p.id" +
-            "   AND DATE_TRUNC('month', d.fecha_reparto) = DATE_TRUNC('month', NOW())" +
+            "   AND d.created_at > NOW() - INTERVAL '15 minutes'" +
             " )",
             Long.class
         );

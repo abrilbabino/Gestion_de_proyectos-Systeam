@@ -85,7 +85,7 @@ contract IdeaMarketplace is AccessControl, ReentrancyGuard, EIP712 {
         require(amount <= listing.amount, "MP: not enough tokens");
         require(amount > 0, "MP: amount > 0");
 
-        uint256 totalPrice = amount * listing.pricePerToken;
+        uint256 totalPrice = (amount * listing.pricePerToken) / 1e18;
         _executeTrade(listing.seller, msg.sender, listing.subToken, amount, totalPrice);
 
         listing.amount -= amount;
@@ -133,7 +133,7 @@ contract IdeaMarketplace is AccessControl, ReentrancyGuard, EIP712 {
         // Consumir nonce (protege contra replay)
         nonces[order.seller]++;
 
-        uint256 totalPrice = order.amount * order.pricePerToken;
+        uint256 totalPrice = (order.amount * order.pricePerToken) / 1e18;
         _executeTrade(order.seller, msg.sender, order.subToken, order.amount, totalPrice);
 
         emit OrderExecuted(order.seller, msg.sender, order.subToken, order.amount, totalPrice);

@@ -73,7 +73,7 @@ public class WalletRepository {
 
             UNION ALL
 
-            SELECT 'VENTA' AS tipo, (precio_unitario * (cantidad_inicial - cantidad)) AS monto,
+            SELECT 'VENTA' AS tipo, ((precio_unitario / 1e18) * (cantidad_inicial - cantidad)) AS monto,
                    (cantidad_inicial - cantidad) AS cantidad,
                    tx_hash, 'Venta de tokens' AS descripcion, updated_at AS fecha
             FROM order_book WHERE seller_id = ? AND cantidad < cantidad_inicial

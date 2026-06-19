@@ -59,12 +59,14 @@ public class DividendController {
     public Map<String, Object> reclamarDividendos(
             @PathVariable Long proyectoId,
             @AuthenticationPrincipal JwtPrincipal principal,
-            @RequestParam(required = false) String wallet) {
-        dividendService.reclamarDividendos(proyectoId, principal.userId(), wallet);
-        BigInteger pendientes = dividendService.consultarDividendosPendientes(proyectoId, wallet);
+            @RequestParam(required = false) String wallet,
+            @RequestParam String txHash) {
+        dividendService.reclamarDividendos(proyectoId, principal.userId(), wallet, txHash);
+        BigInteger pendientesWei = dividendService.consultarDividendosPendientes(proyectoId, wallet);
+        BigDecimal pendientesIdea = new BigDecimal(pendientesWei).divide(BigDecimal.TEN.pow(18));
         return Map.of(
             "mensaje", "Dividendos reclamados exitosamente",
-            "pendientes", pendientes
+            "pendientes", pendientesIdea
         );
     }
 
@@ -73,8 +75,9 @@ public class DividendController {
     public Map<String, Object> dividendosPendientes(
             @PathVariable Long proyectoId,
             @RequestParam String wallet) {
-        BigInteger pendientes = dividendService.consultarDividendosPendientes(proyectoId, wallet);
-        return Map.of("pendientes", pendientes);
+        BigInteger pendientesWei = dividendService.consultarDividendosPendientes(proyectoId, wallet);
+        BigDecimal pendientesIdea = new BigDecimal(pendientesWei).divide(BigDecimal.TEN.pow(18));
+        return Map.of("pendientes", pendientesIdea);
     }
 
     @GetMapping("/mis-reclamos")

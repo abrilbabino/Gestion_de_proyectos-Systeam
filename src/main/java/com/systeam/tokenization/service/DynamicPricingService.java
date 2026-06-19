@@ -13,7 +13,7 @@ public class DynamicPricingService {
     private static final Logger log = LoggerFactory.getLogger(DynamicPricingService.class);
 
     private static final BigDecimal FACTOR_SOBRE_OFERTA = new BigDecimal("0.30");
-    private static final BigDecimal PRECIO_MINIMO_RATIO = new BigDecimal("0.50");
+    private static final BigDecimal PRECIO_MINIMO_RATIO = new BigDecimal("1.00");
 
     private static final BigDecimal UMBRAL_FINANCIAMIENTO = new BigDecimal("0.70");
     private static final BigDecimal MAX_INCREMENTO_FINANCIAMIENTO = new BigDecimal("0.20");

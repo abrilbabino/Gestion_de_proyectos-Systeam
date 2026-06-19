@@ -89,6 +89,12 @@ public class InvestmentService {
             precioBase, montoRecaudado, montoRequerido
         );
 
+        int descuentoPorcentaje = getLoyaltyDiscountPercentage(usuarioId, request.getProyectoId());
+        if (descuentoPorcentaje > 0) {
+            BigDecimal multiplier = BigDecimal.valueOf(100 - descuentoPorcentaje).divide(BigDecimal.valueOf(100));
+            precioSubtoken = precioSubtoken.multiply(multiplier);
+        }
+
         if (cupoRestante <= 0) {
             return ValidateInvestmentResponse.builder()
                     .valido(false)
@@ -110,6 +116,7 @@ public class InvestmentService {
                     .cupoDisponible(cupoRestante)
                     .precioSubtoken(precioSubtoken)
                     .subTokensARecebir(0)
+                    .descuentoPorcentaje(descuentoPorcentaje)
                     .build();
         }
 
@@ -132,10 +139,11 @@ public class InvestmentService {
         if (subTokensNecesarios > cupoRestante) {
             return ValidateInvestmentResponse.builder()
                     .valido(false)
-                    .mensaje("El monto solicitado supera el cupo disponible del proyecto")
+                    .mensaje("La cantidad solicitada supera el cupo disponible del proyecto")
                     .cupoDisponible(cupoRestante)
                     .precioSubtoken(precioSubtoken)
                     .subTokensARecebir(subTokensNecesarios)
+                    .descuentoPorcentaje(descuentoPorcentaje)
                     .build();
         }
 
@@ -148,6 +156,7 @@ public class InvestmentService {
                     .cupoDisponible(cupoRestante)
                     .precioSubtoken(precioSubtoken)
                     .subTokensARecebir(subTokensNecesarios)
+                    .descuentoPorcentaje(descuentoPorcentaje)
                     .build();
         }
 
@@ -157,6 +166,7 @@ public class InvestmentService {
                 .cupoDisponible(cupoRestante)
                 .precioSubtoken(precioSubtoken)
                 .subTokensARecebir(subTokensNecesarios)
+                .descuentoPorcentaje(descuentoPorcentaje)
                 .build();
     }
 
@@ -186,6 +196,12 @@ public class InvestmentService {
             precioBase, montoRecaudado, montoRequerido
         );
 
+        int descuentoPorcentaje = getLoyaltyDiscountPercentage(usuarioId, request.getProyectoId());
+        if (descuentoPorcentaje > 0) {
+            BigDecimal multiplier = BigDecimal.valueOf(100 - descuentoPorcentaje).divide(BigDecimal.valueOf(100));
+            precioSubtoken = precioSubtoken.multiply(multiplier);
+        }
+
         int subTokens = request.getMontoIdea()
                 .divide(precioSubtoken, 0, RoundingMode.DOWN)
                 .intValue();
@@ -207,7 +223,7 @@ public class InvestmentService {
         }
 
         if (subTokens > cupoRestante) {
-            throw new ConflictException("El monto solicitado supera el cupo disponible del proyecto");
+            throw new ConflictException("La cantidad de tokens solicitada supera el cupo disponible del proyecto");
         }
 
         subtokenService.validateMaxOwnership(usuarioId, subtokenId, subTokens);
@@ -268,8 +284,13 @@ public class InvestmentService {
         inv.setSubTokensRecibidos(subTokens);
         inv.setTxHash(txHash);
         inv.setEstado("CONFIRMADA");
+        inv.setDescuentoPorcentaje(descuentoPorcentaje);
 
-        return toResponse(investmentRepository.save(inv));
+        Inversion savedInv = investmentRepository.save(inv);
+
+        // Airdrop de Fidelidad eliminado. Se aplica directamente como descuento.
+
+        return toResponse(savedInv);
     }
 
     public Page<InvestmentResponse> getInvestmentHistory(Long usuarioId, Pageable pageable) {
@@ -445,9 +466,32 @@ public class InvestmentService {
                 .precioSubtoken(precioSubtoken)
                 .txHash(inv.getTxHash())
                 .estado(inv.getEstado())
+                .descuentoPorcentaje(inv.getDescuentoPorcentaje())
                 .createdAt(inv.getCreatedAt())
                 .updatedAt(inv.getUpdatedAt())
                 .build();
     }
 
+    private int getLoyaltyDiscountPercentage(Long usuarioId, Long proyectoId) {
+        try {
+            Long creadorId = jdbc.queryForObject(
+                "SELECT creador_id FROM projects WHERE id = ?", Long.class, proyectoId
+            );
+            
+            Integer pastInvestments = jdbc.queryForObject(
+                "SELECT COUNT(i.id) FROM investments i " +
+                "JOIN projects p ON i.proyecto_id = p.id " +
+                "WHERE i.usuario_id = ? AND p.creador_id = ?",
+                Integer.class, usuarioId, creadorId
+            );
+            
+            // TODO: Here we can easily scale tiers (e.g. if > 10 return 15, if > 5 return 10)
+            if (pastInvestments != null && pastInvestments > 0) {
+                return 5;
+            }
+        } catch (Exception e) {
+            log.warn("Error calculando descuento de lealtad: {}", e.getMessage());
+        }
+        return 0;
+    }
 }

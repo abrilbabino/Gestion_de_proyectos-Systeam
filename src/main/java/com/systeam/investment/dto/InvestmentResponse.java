@@ -19,6 +19,7 @@ public class InvestmentResponse {
     private BigDecimal precioSubtoken;
     private String txHash;
     private String estado;
+    private Integer descuentoPorcentaje;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

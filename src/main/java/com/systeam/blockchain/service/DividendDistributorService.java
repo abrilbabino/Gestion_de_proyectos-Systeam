@@ -49,14 +49,45 @@ public class DividendDistributorService {
     public String distribute(BigInteger proyectoId, BigInteger totalDividend) throws Exception {
         String distributorAddress = props.getDividendDistributorAddress();
         assertConfigured(distributorAddress, "DividendDistributor");
+        
+        String ideaTokenAddress = props.getIdeaTokenAddress();
+        assertConfigured(ideaTokenAddress, "IdeaToken");
 
+        // 1. Check Allowance
+        Function allowanceFn = new Function(
+            "allowance",
+            List.of(new Address(credentials.getAddress()), new Address(distributorAddress)),
+            List.of(new TypeReference<Uint256>() {})
+        );
+        List<org.web3j.abi.datatypes.Type> result = executeCall(ideaTokenAddress, allowanceFn);
+        BigInteger currentAllowance = BigInteger.ZERO;
+        if (!result.isEmpty() && result.get(0) instanceof Uint256 val) {
+            currentAllowance = val.getValue();
+        }
+
+        // 2. Approve if needed (Infinite approval)
+        if (currentAllowance.compareTo(totalDividend) < 0) {
+            BigInteger maxUint256 = new BigInteger("115792089237316195423570985008687907853269984665640564039457584007913129639935");
+            Function approveFn = new Function(
+                "approve",
+                List.of(new Address(distributorAddress), new Uint256(maxUint256)),
+                List.of()
+            );
+            String txHash = sendTransaction(ideaTokenAddress, approveFn, BigInteger.valueOf(100_000L));
+            log.info("Aprobados IDEA ilimitados para DividendDistributor en tx {}", txHash);
+            
+            // Wait for the transaction to be mined to avoid in-flight limits
+            Thread.sleep(15000); 
+        }
+
+        // 3. Distribute
         Function fn = new Function(
             "distribute",
             List.of(new Uint256(proyectoId), new Uint256(totalDividend)),
             List.of()
         );
 
-        return sendTransaction(distributorAddress, fn, BigInteger.valueOf(200_000L));
+        return sendTransaction(distributorAddress, fn, BigInteger.valueOf(300_000L));
     }
 
     public String claim(BigInteger proyectoId) throws Exception {

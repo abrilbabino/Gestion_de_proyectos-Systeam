@@ -191,7 +191,7 @@ public class IdeafyFactoryService {
         }
     }
 
-    private String sendTransaction(String contractAddress, Function fn, BigInteger gasLimit) throws Exception {
+    public String sendTransaction(String contractAddress, Function fn, BigInteger gasLimit) throws Exception {
         String encodedFunction = FunctionEncoder.encode(fn);
         EthSendTransaction response = txManager.sendTransaction(
             web3j.ethGasPrice().send().getGasPrice(),
@@ -208,7 +208,7 @@ public class IdeafyFactoryService {
         return txHash;
     }
 
-    private List<org.web3j.abi.datatypes.Type> executeCall(String contractAddress, Function fn) throws Exception {
+    public List<org.web3j.abi.datatypes.Type> executeCall(String contractAddress, Function fn) throws Exception {
         String encodedFunction = FunctionEncoder.encode(fn);
         EthCall response = web3j.ethCall(
             Transaction.createEthCallTransaction(credentials.getAddress(), contractAddress, encodedFunction),

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
+import com.systeam.blockchain.service.IdeaSwapService;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
 import com.systeam.project.exception.ResourceNotFoundException;
@@ -26,12 +27,14 @@ public class DividendService {
     private final JdbcTemplate jdbc;
     private final DividendDistributorService dividendDistributorService;
     private final BlockchainService blockchainService;
+    private final IdeaSwapService ideaSwapService;
 
     public DividendService(JdbcTemplate jdbc, DividendDistributorService dividendDistributorService,
-                           BlockchainService blockchainService) {
+                           BlockchainService blockchainService, IdeaSwapService ideaSwapService) {
         this.jdbc = jdbc;
         this.dividendDistributorService = dividendDistributorService;
         this.blockchainService = blockchainService;
+        this.ideaSwapService = ideaSwapService;
     }
 
     @Transactional
@@ -71,18 +74,21 @@ public class DividendService {
         }
 
         // Save in DB as historical record
-        Integer totalSubtokensColocados = jdbc.queryForObject(
-            "SELECT COALESCE(SUM(pa.cantidad), 0) FROM portfolio_activos pa " +
-            "JOIN subtokens s ON pa.subtoken_id = s.id WHERE s.proyecto_id = ?",
+        Integer suministroTotal = jdbc.queryForObject(
+            "SELECT suministro_total FROM subtokens WHERE proyecto_id = ?",
             Integer.class, proyectoId
         );
 
-        if (totalSubtokensColocados == null || totalSubtokensColocados <= 0) {
-            throw new ConflictException("No hay subtokens colocados para este proyecto");
+        if (suministroTotal == null || suministroTotal <= 0) {
+            throw new ConflictException("No hay suministro de subtokens para este proyecto");
         }
 
-        BigDecimal montoPorSubtoken = montoTotal.divide(
-            BigDecimal.valueOf(totalSubtokensColocados), 4, RoundingMode.HALF_UP
+        // El Smart Contract retiene un 5% de comision (DISTRIBUTION_FEE_BPS = 500)
+        BigDecimal fee = montoTotal.multiply(new BigDecimal("0.05"));
+        BigDecimal montoNeto = montoTotal.subtract(fee);
+
+        BigDecimal montoPorSubtoken = montoNeto.divide(
+            BigDecimal.valueOf(suministroTotal), 4, RoundingMode.HALF_UP
         );
 
         Long dividendoId = jdbc.queryForObject("""
@@ -124,21 +130,11 @@ public class DividendService {
             );
         }
 
-        BigDecimal dividendBps;
-        try {
-            Integer bps = jdbc.queryForObject(
-                "SELECT dividend_bps FROM subtokens WHERE proyecto_id = ?",
-                Integer.class, proyectoId
-            );
-            dividendBps = bps != null ? BigDecimal.valueOf(bps) : BigDecimal.valueOf(3000);
-        } catch (Exception e) {
-            log.warn("No se pudo obtener dividend_bps para proyecto {}: {}. Usando 30%.", proyectoId, e.getMessage());
-            dividendBps = BigDecimal.valueOf(3000);
-        }
+        BigDecimal dividendBps = BigDecimal.valueOf(3000); // 30% by default, dividend_bps column doesn't exist
 
         BigDecimal montoFacturado = (BigDecimal) billing.get("montoFacturado");
         // dividendBps es tasa anual (ej: 2000 = 20% anual). Dividimos /12 para tasa mensual.
-        BigDecimal montoReparto = montoFacturado
+        BigDecimal montoRepartoUsdc = montoFacturado
             .multiply(dividendBps)
             .divide(BigDecimal.valueOf(10000), 4, java.math.RoundingMode.HALF_UP)
             .divide(BigDecimal.valueOf(12), 4, java.math.RoundingMode.HALF_UP);
@@ -146,40 +142,39 @@ public class DividendService {
         log.info("Reparto oracle: proyecto={}, montoFacturado={}, bps={} ({}% anual), montoReparto mensual={}",
             proyectoId, montoFacturado, dividendBps,
             dividendBps.divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP),
-            montoReparto);
+            montoRepartoUsdc);
 
-        return crearReparto(proyectoId, montoReparto);
+        try {
+            // 1. Convert montoRepartoUsdc to Wei
+            BigInteger usdcWei = montoRepartoUsdc.multiply(BigDecimal.TEN.pow(18)).toBigIntegerExact();
+
+            // 2. Calculate how much $IDEA we can buy with that USDC
+            BigInteger ideaToBuy = ideaSwapService.getIdeaOutForExactUsdcIn(usdcWei);
+            log.info("Calculado swap: con {} USDC se comprarán {} IDEA", montoRepartoUsdc, new BigDecimal(ideaToBuy).divide(BigDecimal.TEN.pow(18)));
+
+            // 3. Execute the Swap (USDC -> IDEA) and WAIT for mining before distributing
+            String swapTx = ideaSwapService.swapUsdcForExactIdeaAndWait(ideaToBuy);
+            log.info("Swap confirmado on-chain. Tx: {}", swapTx);
+
+            // 4. Distribute the recently bought $IDEA to the holders
+            BigDecimal montoIdea = new BigDecimal(ideaToBuy).divide(BigDecimal.TEN.pow(18));
+            return crearReparto(proyectoId, montoIdea);
+
+        } catch (Exception e) {
+            log.error("Error al ejecutar swap o reparto de dividendos: {}", e.getMessage(), e);
+            throw new RuntimeException("Error en proceso de dividendos: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
-    public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet) {
-        // Blockchain first — claim on-chain and verify before updating DB
-        if (wallet != null && !wallet.isBlank()) {
-            try {
-                BigInteger claimable = dividendDistributorService.getClaimable(
-                    BigInteger.valueOf(proyectoId), wallet
-                );
-                if (claimable.compareTo(BigInteger.ZERO) > 0) {
-                    String txHash = dividendDistributorService.claim(
-                        BigInteger.valueOf(proyectoId)
-                    );
-                    if (!verifyBlockchainTx(txHash)) {
-                        throw new ConflictException("El reclamo de dividendos on-chain fallo en Sepolia");
-                    }
-                    log.info("Dividendos reclamados on-chain: proyecto={}, wallet={}, tx={}",
-                        proyectoId, wallet, txHash);
-                } else {
-                    log.info("No hay dividendos pendientes on-chain para proyecto={}, wallet={}",
-                        proyectoId, wallet);
-                }
-            } catch (ConflictException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new ConflictException("Error al reclamar dividendos on-chain: " + e.getMessage());
-            }
+    public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet, String txHash) {
+        if (!verifyBlockchainTx(txHash)) {
+            throw new ConflictException("El reclamo de dividendos on-chain falló o la txHash es inválida");
         }
+        log.info("Dividendos reclamados verificados on-chain: proyecto={}, wallet={}, tx={}",
+            proyectoId, wallet, txHash);
 
-        // 2. Calcular y acreditar via DB (registro histórico + saldo_idea)
+        // 2. Acreditar via DB (registro histórico solamente, el Smart Contract ya envió los tokens)
         List<Map<String, Object>> activos = jdbc.query(
             "SELECT pa.subtoken_id, pa.cantidad, s.nombre " +
             "FROM portfolio_activos pa " +
@@ -220,9 +215,6 @@ public class DividendService {
                 VALUES ((SELECT id FROM dividendos WHERE proyecto_id = ? ORDER BY created_at DESC LIMIT 1),
                     ?, ?, ?, ?, NOW())
                 """, proyectoId, usuarioId, subtokenId, cantidad, montoRecibido);
-
-            jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?",
-                montoRecibido, usuarioId);
         }
 
         log.info("Dividendos reclamados: proyecto={}, usuario={}",
@@ -231,6 +223,7 @@ public class DividendService {
 
     public BigInteger consultarDividendosPendientes(Long proyectoId, String wallet) {
         if (wallet == null || wallet.isBlank()) return BigInteger.ZERO;
+        
         try {
             return dividendDistributorService.getClaimable(
                 BigInteger.valueOf(proyectoId), wallet

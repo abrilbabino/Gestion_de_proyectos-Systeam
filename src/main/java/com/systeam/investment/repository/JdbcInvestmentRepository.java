@@ -49,6 +49,12 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
         Timestamp updatedAt = rs.getTimestamp("updated_at");
         if (updatedAt != null) inv.setUpdatedAt(updatedAt.toLocalDateTime());
 
+        // Manejar descuento_porcentaje que puede ser null
+        Object desc = rs.getObject("descuento_porcentaje");
+        if (desc != null) {
+            inv.setDescuentoPorcentaje(((Number) desc).intValue());
+        }
+
         return inv;
     };
 
@@ -57,8 +63,8 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
         if (inversion.getId() == null) {
             String sql = """
                 INSERT INTO investments (usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos,
-                    tx_hash, estado, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                    tx_hash, estado, descuento_porcentaje, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 RETURNING id
                 """;
             Long id = jdbc.queryForObject(sql, Long.class,
@@ -67,13 +73,14 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
                 inversion.getMontoIdea(),
                 inversion.getSubTokensRecibidos(),
                 inversion.getTxHash(),
-                inversion.getEstado()
+                inversion.getEstado(),
+                inversion.getDescuentoPorcentaje()
             );
             inversion.setId(id);
         } else {
             String sql = """
                 UPDATE investments SET monto_idea=?, sub_tokens_recibidos=?, tx_hash=?,
-                    estado=?, updated_at=NOW()
+                    estado=?, descuento_porcentaje=?, updated_at=NOW()
                 WHERE id=?
                 """;
             jdbc.update(sql,
@@ -81,6 +88,7 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
                 inversion.getSubTokensRecibidos(),
                 inversion.getTxHash(),
                 inversion.getEstado(),
+                inversion.getDescuentoPorcentaje(),
                 inversion.getId()
             );
         }
@@ -90,9 +98,8 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
     @Override
     public Optional<Inversion> findById(Long id) {
         try {
-            return Optional.ofNullable(
-                jdbc.queryForObject("SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, created_at, updated_at FROM investments WHERE id = ?", rowMapper, id)
-            );
+            Inversion inv = jdbc.queryForObject("SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, descuento_porcentaje, created_at, updated_at FROM investments WHERE id = ?", rowMapper, id);
+            return Optional.ofNullable(inv);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
@@ -104,7 +111,7 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
             "SELECT COUNT(*) FROM investments WHERE usuario_id = ?", Long.class, usuarioId
         );
         List<Inversion> list = jdbc.query(
-            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, created_at, updated_at FROM investments WHERE usuario_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, descuento_porcentaje, created_at, updated_at FROM investments WHERE usuario_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
             rowMapper, usuarioId, pageable.getPageSize(), pageable.getOffset()
         );
         return new PageImpl<>(list, pageable, total != null ? total : 0L);
@@ -113,7 +120,7 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
     @Override
     public List<Inversion> findByProyectoIdAndEstado(Long proyectoId, String estado) {
         return jdbc.query(
-            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, created_at, updated_at FROM investments WHERE proyecto_id = ? AND estado = ?",
+            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, descuento_porcentaje, created_at, updated_at FROM investments WHERE proyecto_id = ? AND estado = ?",
             rowMapper, proyectoId, estado
         );
     }
@@ -121,7 +128,7 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
     @Override
     public List<Inversion> findPendingRefundsByProyectoId(Long proyectoId) {
         return jdbc.query(
-            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, created_at, updated_at FROM investments WHERE proyecto_id = ? AND estado IN ('PENDIENTE', 'CONFIRMADA')",
+            "SELECT id, usuario_id, proyecto_id, monto_idea, sub_tokens_recibidos, tx_hash, estado, descuento_porcentaje, created_at, updated_at FROM investments WHERE proyecto_id = ? AND estado IN ('PENDIENTE', 'CONFIRMADA')",
             rowMapper, proyectoId
         );
     }

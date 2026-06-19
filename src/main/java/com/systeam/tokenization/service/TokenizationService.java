@@ -295,7 +295,9 @@ public class TokenizationService {
         }
         try {
             BigInteger softCap = montoRequerido.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
-            BigInteger hardCap = softCap;
+            // Permitir un hardCap 20% mayor al softCap para acomodar el sobreprecio del Dynamic Pricing
+            // sin que la última compra exceda el límite y bloquee el proyecto.
+            BigInteger hardCap = softCap.multiply(BigInteger.valueOf(120)).divide(BigInteger.valueOf(100));
             BigInteger pricePerToken = valorNominal.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
             BigInteger startTime = BigInteger.valueOf(System.currentTimeMillis() / 1000);
             BigInteger endTime = BigInteger.valueOf(plazo.toEpochSecond(ZoneOffset.UTC));

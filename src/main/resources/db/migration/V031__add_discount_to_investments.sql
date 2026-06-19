@@ -1,0 +1,1 @@
+ALTER TABLE investments ADD COLUMN IF NOT EXISTS descuento_porcentaje INTEGER DEFAULT 0;

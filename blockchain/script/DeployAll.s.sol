@@ -10,19 +10,22 @@ import "../contracts/IdeaMarketplace.sol";
 import "../contracts/IdeaGovernance.sol";
 import "../contracts/IdeaSwap.sol";
 import "../contracts/DividendDistributor.sol";
+import "../contracts/MockUSDC.sol";
 
 contract DeployAll is Script {
     function run() external {
         // ── Config ────────────────────────────────────────────
-        address usdc = vm.envAddress("BLOCKCHAIN_USDC");
         uint256 deployerPK = vm.envUint("BLOCKCHAIN_PRIVATE_KEY");
         address backend = vm.addr(deployerPK);
 
         console.log("=== Deployer: %s ===", backend);
-        console.log("USDC:       %s", usdc);
         console.log("");
 
         vm.startBroadcast(deployerPK);
+
+        // 0. MockUSDC
+        MockUSDC usdc = new MockUSDC();
+        console.log("MockUSDC:   %s", address(usdc));
 
         // 1. IdeaToken
         IdeaToken ideaToken = new IdeaToken();
@@ -63,8 +66,15 @@ contract DeployAll is Script {
         console.log("IdeaGovernance: %s", address(governance));
 
         // 10. IdeaSwap
-        IdeaSwap swap = new IdeaSwap(address(ideaToken), usdc);
+        IdeaSwap swap = new IdeaSwap(address(ideaToken), address(usdc));
         console.log("IdeaSwap:   %s", address(swap));
+
+        // 10.1 Inject Initial Liquidity
+        uint256 liquidityAmount = 1_000_000 * 10**18;
+        ideaToken.approve(address(swap), liquidityAmount);
+        usdc.approve(address(swap), liquidityAmount);
+        swap.addLiquidity(liquidityAmount, liquidityAmount);
+        console.log("  -> Liquidity injected: 1M IDEA / 1M USDC");
 
         // 11. DividendDistributor
         DividendDistributor distributor = new DividendDistributor(address(ideaToken), address(factory));
@@ -82,6 +92,7 @@ contract DeployAll is Script {
         console.log("=== COPY-PASTA ESTO A TU .env ===");
         console.log("");
         console.log("BLOCKCHAIN_IDEA_TOKEN=%s", address(ideaToken));
+        console.log("BLOCKCHAIN_USDC=%s", address(usdc));
         console.log("BLOCKCHAIN_IDEAFY_FACTORY=%s", address(factory));
         console.log("BLOCKCHAIN_OFFERING_CONTRACT=%s", address(offering));
         console.log("BLOCKCHAIN_DIVIDEND_DISTRIBUTOR=%s", address(distributor));
