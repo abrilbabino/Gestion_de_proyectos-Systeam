@@ -33,13 +33,11 @@ public class DividendScheduler {
         log.info("Iniciando distribucion mensual de dividendos...");
 
         List<Long> proyectos = jdbc.queryForList(
-            "SELECT p.id FROM projects p WHERE p.estado IN ('EJECUCION', 'FINALIZADO')" +
-            " AND p.deleted_at IS NULL" +
-            " AND NOT EXISTS (" +
-            "   SELECT 1 FROM dividendos d" +
-            "   WHERE d.proyecto_id = p.id" +
-            "   AND d.created_at > NOW() - INTERVAL '15 minutes'" +
-            " )",
+            "SELECT DISTINCT p.id FROM projects p " +
+            "JOIN oracle_billing ob ON ob.proyecto_id = p.id " +
+            "WHERE p.estado IN ('EJECUCION', 'FINALIZADO') " +
+            "AND p.deleted_at IS NULL " +
+            "AND ob.procesado = false",
             Long.class
         );
 

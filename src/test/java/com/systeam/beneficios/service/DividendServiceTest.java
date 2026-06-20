@@ -202,7 +202,7 @@ class DividendServiceTest {
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of());
 
-            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx"))
+            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("No tienes subtokens");
         }
@@ -216,7 +216,7 @@ class DividendServiceTest {
             when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
                 .thenReturn(BigDecimal.ZERO);
 
-            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx"))
+            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("No hay dividendos");
         }
@@ -232,7 +232,7 @@ class DividendServiceTest {
             when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
                 .thenReturn(new BigDecimal("50.0000"));
 
-            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx");
+            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null);
 
             verify(jdbc).update(
                 argThat(sql -> sql != null && sql.toString().contains("INSERT INTO reclamos_dividendos")),
@@ -252,7 +252,7 @@ class DividendServiceTest {
             when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
                 .thenReturn(new BigDecimal("25.0000"));
 
-            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, null, "0xtx");
+            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, null, "0xtx", null);
 
             verify(jdbc).update(
                 argThat(sql -> sql != null && sql.toString().contains("INSERT INTO reclamos_dividendos")),

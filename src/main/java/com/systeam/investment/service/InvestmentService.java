@@ -202,6 +202,7 @@ public class InvestmentService {
         BigDecimal precioSubtoken = dynamicPricingService.calcularPrecioFinanciamiento(
             precioBase, montoRecaudado, montoRequerido
         );
+        BigDecimal precioSinDescuento = precioSubtoken;
 
         int descuentoPorcentaje = getLoyaltyDiscountPercentage(usuarioId, request.getProyectoId());
         if (descuentoPorcentaje > 0) {
@@ -248,8 +249,10 @@ public class InvestmentService {
             throw new ConflictException("La transaccion blockchain no fue encontrada o fallo en Sepolia");
         }
 
+        BigDecimal montoAporteReal = precioSinDescuento.multiply(BigDecimal.valueOf(subTokens));
+
         jdbc.update("UPDATE projects SET monto_recaudado = COALESCE(monto_recaudado, 0) + ? WHERE id = ?",
-            request.getMontoIdea(), request.getProyectoId());
+            montoAporteReal, request.getProyectoId());
 
         BigDecimal totalOnChain = obtenerMontoRecaudadoOnChain(request.getProyectoId());
         if (totalOnChain.compareTo(montoRequerido) >= 0) {

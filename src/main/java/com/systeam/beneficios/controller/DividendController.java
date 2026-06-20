@@ -60,8 +60,9 @@ public class DividendController {
             @PathVariable Long proyectoId,
             @AuthenticationPrincipal JwtPrincipal principal,
             @RequestParam(required = false) String wallet,
-            @RequestParam String txHash) {
-        dividendService.reclamarDividendos(proyectoId, principal.userId(), wallet, txHash);
+            @RequestParam String txHash,
+            @RequestParam(required = false) BigDecimal amount) {
+        dividendService.reclamarDividendos(proyectoId, principal.userId(), wallet, txHash, amount);
         BigInteger pendientesWei = dividendService.consultarDividendosPendientes(proyectoId, wallet);
         BigDecimal pendientesIdea = new BigDecimal(pendientesWei).divide(BigDecimal.TEN.pow(18));
         return Map.of(

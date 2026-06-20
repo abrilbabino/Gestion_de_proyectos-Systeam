@@ -17,6 +17,7 @@ import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.blockchain.service.IdeaSwapService;
 import com.systeam.notificaciones.event.DividendDistributedEvent;
+import com.systeam.project.config.RubroConfig;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
 import com.systeam.project.exception.ResourceNotFoundException;
@@ -114,13 +115,14 @@ public class DividendService {
         Map<String, Object> billing;
         try {
             billing = jdbc.queryForObject(
-                "SELECT monto_facturado, fecha_reporte, oracle_address, tx_hash " +
-                "FROM oracle_billing WHERE proyecto_id = ? ORDER BY fecha_reporte DESC LIMIT 1",
+                "SELECT id, monto_facturado, fecha_reporte, oracle_address, tx_hash " +
+                "FROM oracle_billing WHERE proyecto_id = ? AND procesado = false ORDER BY fecha_reporte ASC LIMIT 1",
                 (rs, rowNum) -> Map.of(
-                    "montoFacturado", rs.getBigDecimal("monto_facturado"),
-                    "fechaReporte",   rs.getTimestamp("fecha_reporte").toLocalDateTime(),
-                    "oracleAddress",  rs.getString("oracle_address"),
-                    "txHash",         rs.getString("tx_hash")
+                  "id",             rs.getLong("id"),
+                  "montoFacturado", rs.getBigDecimal("monto_facturado"),
+                  "fechaReporte",   rs.getTimestamp("fecha_reporte").toLocalDateTime(),
+                  "oracleAddress",  rs.getString("oracle_address"),
+                  "txHash",         rs.getString("tx_hash")
                 ),
                 proyectoId
             );
@@ -135,19 +137,30 @@ public class DividendService {
             );
         }
 
-        BigDecimal dividendBps = BigDecimal.valueOf(3000); // 30% by default, dividend_bps column doesn't exist
+        // Fetch rubroId from project to get the correct dividend percentage
+        Integer rubroId = jdbc.queryForObject(
+            "SELECT rubro FROM projects WHERE id = ?",
+            Integer.class, proyectoId
+        );
+        if (rubroId == null) {
+            rubroId = RubroConfig.getRubroIdDefault();
+        }
+
+        BigDecimal dividendBps = BigDecimal.valueOf(RubroConfig.getDividendBps(rubroId));
 
         BigDecimal montoFacturado = (BigDecimal) billing.get("montoFacturado");
-        // dividendBps es tasa anual (ej: 2000 = 20% anual). Dividimos /12 para tasa mensual.
+        // El porcentaje de dividendos es una tasa anual. Dividimos /12 para obtener la cuota mensual.
         BigDecimal montoRepartoUsdc = montoFacturado
             .multiply(dividendBps)
             .divide(BigDecimal.valueOf(10000), 4, java.math.RoundingMode.HALF_UP)
             .divide(BigDecimal.valueOf(12), 4, java.math.RoundingMode.HALF_UP);
 
         log.info("Reparto oracle: proyecto={}, montoFacturado={}, bps={} ({}% anual), montoReparto mensual={}",
-            proyectoId, montoFacturado, dividendBps,
-            dividendBps.divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP),
-            montoRepartoUsdc);
+            proyectoId, montoFacturado, dividendBps, dividendBps.divide(BigDecimal.valueOf(100)), montoRepartoUsdc);
+
+        if (montoRepartoUsdc.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ConflictException("El monto a repartir es 0 o menor");
+        }
 
         try {
             // 1. Convert montoRepartoUsdc to Wei
@@ -163,7 +176,12 @@ public class DividendService {
 
             // 4. Distribute the recently bought $IDEA to the holders
             BigDecimal montoIdea = new BigDecimal(ideaToBuy).divide(BigDecimal.TEN.pow(18));
-            return crearReparto(proyectoId, montoIdea);
+            Long dividendoId = crearReparto(proyectoId, montoIdea);
+
+            // 5. Update oracle_billing to mark it as processed
+            jdbc.update("UPDATE oracle_billing SET procesado = true WHERE id = ?", billing.get("id"));
+
+            return dividendoId;
 
         } catch (Exception e) {
             log.error("Error al ejecutar swap o reparto de dividendos: {}", e.getMessage(), e);
@@ -172,14 +190,14 @@ public class DividendService {
     }
 
     @Transactional
-    public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet, String txHash) {
+    public void reclamarDividendos(Long proyectoId, Long usuarioId, String wallet, String txHash, BigDecimal amountParam) {
         if (!verifyBlockchainTx(txHash)) {
-            throw new ConflictException("El reclamo de dividendos on-chain falló o la txHash es inválida");
+            throw new ConflictException("El reclamo de dividendos on-chain fallo o la txHash es invalida");
         }
-        log.info("Dividendos reclamados verificados on-chain: proyecto={}, wallet={}, tx={}",
-            proyectoId, wallet, txHash);
+        log.info("Dividendos reclamados verificados on-chain: proyecto={}, wallet={}, tx={}, amountParam={}",
+            proyectoId, wallet, txHash, amountParam);
 
-        // 2. Acreditar via DB (registro histórico solamente, el Smart Contract ya envió los tokens)
+        // 2. Acreditar via DB (registro historico solamente, el Smart Contract ya envio los tokens)
         List<Map<String, Object>> activos = jdbc.query(
             "SELECT pa.subtoken_id, pa.cantidad, s.nombre " +
             "FROM portfolio_activos pa " +
@@ -197,42 +215,48 @@ public class DividendService {
             throw new ConflictException("No tienes subtokens en este proyecto");
         }
 
-        BigDecimal montoPorSubtoken = jdbc.queryForObject(
-            "SELECT COALESCE((SELECT monto_por_subtoken FROM dividendos WHERE proyecto_id = ? " +
-            "ORDER BY created_at DESC LIMIT 1), 0)",
-            BigDecimal.class, proyectoId
+        // Obtenemos el último dividendo_id global para este proyecto
+        Long ultimoDividendoId = jdbc.queryForObject(
+            "SELECT id FROM dividendos WHERE proyecto_id = ? ORDER BY created_at DESC LIMIT 1",
+            Long.class, proyectoId
         );
 
-        if (montoPorSubtoken == null || montoPorSubtoken.compareTo(BigDecimal.ZERO) <= 0) {
+        if (ultimoDividendoId == null) {
             throw new ConflictException("No hay dividendos registrados para este proyecto");
         }
 
+        BigDecimal montoTotal = BigDecimal.ZERO;
         for (Map<String, Object> activo : activos) {
             Long subtokenId = (Long) activo.get("subtokenId");
             Integer cantidad = (Integer) activo.get("cantidad");
 
-            BigDecimal montoRecibido = montoPorSubtoken.multiply(BigDecimal.valueOf(cantidad))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal montoRecibido;
+            if (amountParam != null) {
+                // If the frontend passed the exact amount from the smart contract, use it proportionately
+                // (Though usually a user only has 1 subtoken type per project, so it will just be the full amount)
+                montoRecibido = amountParam;
+            } else {
+                BigDecimal montoPorSubtoken = jdbc.queryForObject(
+                    "SELECT COALESCE(SUM(monto_por_subtoken), 0) FROM dividendos WHERE proyecto_id = ? " +
+                    "AND id > COALESCE((SELECT MAX(dividendo_id) FROM reclamos_dividendos " +
+                    "WHERE usuario_id = ? AND subtoken_id = ?), 0)",
+                    BigDecimal.class, proyectoId, usuarioId, subtokenId
+                );
+                montoRecibido = montoPorSubtoken.multiply(new BigDecimal(cantidad));
+            }
 
             jdbc.update("""
                 INSERT INTO reclamos_dividendos (dividendo_id, usuario_id, subtoken_id,
-                    cantidad_subtokens, monto_recibido, reclamado_en)
-                VALUES ((SELECT id FROM dividendos WHERE proyecto_id = ? ORDER BY created_at DESC LIMIT 1),
-                    ?, ?, ?, ?, NOW())
-                """, proyectoId, usuarioId, subtokenId, cantidad, montoRecibido);
-        }
-
-        log.info("Dividendos reclamados: proyecto={}, usuario={}",
-                proyectoId, usuarioId);
-
-        // Calculate total monto and publish event — DividendEventListener handles email
-        BigDecimal montoTotal = BigDecimal.ZERO;
-        for (Map<String, Object> activo : activos) {
-            Integer cantidad = (Integer) activo.get("cantidad");
-            BigDecimal montoRecibido = montoPorSubtoken.multiply(BigDecimal.valueOf(cantidad))
-                    .setScale(2, RoundingMode.HALF_UP);
+                    cantidad_subtokens, monto_recibido, reclamado_en, tx_hash)
+                VALUES (?, ?, ?, ?, ?, NOW(), ?)
+                """, ultimoDividendoId, usuarioId, subtokenId, cantidad, montoRecibido, txHash);
+            
             montoTotal = montoTotal.add(montoRecibido);
         }
+
+        log.info("Dividendos reclamados: proyecto={}, usuario={}, montoTotal={}",
+                proyectoId, usuarioId, montoTotal);
+
         eventPublisher.publishEvent(new DividendDistributedEvent(proyectoId, usuarioId, montoTotal));
     }
 
@@ -270,17 +294,20 @@ public class DividendService {
             "FROM reclamos_dividendos rd " +
             "JOIN dividendos d ON rd.dividendo_id = d.id " +
             "WHERE rd.usuario_id = ? ORDER BY rd.reclamado_en DESC",
-            (rs, rowNum) -> Map.of(
-                "id", rs.getLong("id"),
-                "dividendoId", rs.getLong("dividendo_id"),
-                "proyectoId", rs.getLong("proyecto_id"),
-                "subtokenId", rs.getLong("subtoken_id"),
-                "cantidadSubtokens", rs.getInt("cantidad_subtokens"),
-                "montoRecibido", rs.getBigDecimal("monto_recibido"),
-                "reclamadoEn", rs.getTimestamp("reclamado_en").toLocalDateTime(),
-                "montoTotal", rs.getBigDecimal("monto_total"),
-                "montoPorSubtoken", rs.getBigDecimal("monto_por_subtoken")
-            ),
+            (rs, rowNum) -> {
+                Map<String, Object> row = new java.util.HashMap<>();
+                row.put("id", rs.getLong("id"));
+                row.put("dividendoId", rs.getLong("dividendo_id"));
+                row.put("proyectoId", rs.getLong("proyecto_id"));
+                row.put("subtokenId", rs.getLong("subtoken_id"));
+                row.put("cantidadSubtokens", rs.getInt("cantidad_subtokens"));
+                row.put("montoRecibido", rs.getBigDecimal("monto_recibido"));
+                row.put("reclamadoEn", rs.getTimestamp("reclamado_en").toLocalDateTime());
+                row.put("montoTotal", rs.getBigDecimal("monto_total"));
+                row.put("montoPorSubtoken", rs.getBigDecimal("monto_por_subtoken"));
+                row.put("txHash", rs.getString("tx_hash"));
+                return row;
+            },
             usuarioId
         );
     }
