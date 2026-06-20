@@ -10,6 +10,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaMarketplaceService;
 import com.systeam.marketplace.dto.CreateListingRequest;
 import com.systeam.marketplace.dto.ListingResponse;
+import com.systeam.notificaciones.event.MarketplaceEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.service.SubtokenService;
@@ -35,15 +37,18 @@ public class MarketplaceService {
     private final IdeaMarketplaceService ideaMarketplaceService;
     private final SubtokenService subtokenService;
     private final BlockchainService blockchainService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public MarketplaceService(JdbcTemplate jdbc,
                               IdeaMarketplaceService ideaMarketplaceService,
                               SubtokenService subtokenService,
-                              BlockchainService blockchainService) {
+                              BlockchainService blockchainService,
+                              ApplicationEventPublisher eventPublisher) {
         this.jdbc = jdbc;
         this.ideaMarketplaceService = ideaMarketplaceService;
         this.subtokenService = subtokenService;
         this.blockchainService = blockchainService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -96,6 +101,12 @@ public class MarketplaceService {
             UPDATE portfolio_activos SET cantidad = cantidad - ?, updated_at = NOW()
             WHERE usuario_id = ? AND subtoken_id = ?
             """, request.getCantidad(), sellerId, request.getSubtokenId());
+
+        Long projectId = ((Number) subtoken.get("proyecto_id")).longValue();
+        String projectName = findProjectNameById(projectId);
+        eventPublisher.publishEvent(new MarketplaceEvent(projectId, null, sellerId,
+            MarketplaceEvent.Type.LISTED, projectName,
+            request.getCantidad(), request.getPrecioUnitario(), request.getTxHash()));
 
         log.info("MKT-03: Listing creada id={} seller={} cantidad={}", listingId, sellerId, request.getCantidad());
         return getListingById(listingId);
@@ -154,10 +165,16 @@ public class MarketplaceService {
 
         BigInteger newCantidad = available.subtract(cantidad);
         if (newCantidad.compareTo(BigInteger.ZERO) == 0) {
-            jdbc.update("UPDATE order_book SET cantidad = 0, estado = 'EXECUTED', updated_at = NOW() WHERE id = ?", listingId);
+            jdbc.update("UPDATE order_book SET estado = 'EXECUTED', updated_at = NOW() WHERE id = ?", listingId);
         } else {
             jdbc.update("UPDATE order_book SET cantidad = ?, updated_at = NOW() WHERE id = ?", newCantidad, listingId);
         }
+
+        Long projectId = getProjectIdBySubtokenId(subtokenId);
+        String projectName = findProjectNameById(projectId);
+        eventPublisher.publishEvent(new MarketplaceEvent(projectId, buyerId, sellerId,
+            MarketplaceEvent.Type.SOLD, projectName,
+            cantidad, precioUnitario, txHash));
 
         log.info("MKT-03: Compra ejecutada listing={} buyer={} cantidad={} total={}", listingId, buyerId, cantidad, totalPrice);
         return getListingById(listingId);
@@ -188,6 +205,12 @@ public class MarketplaceService {
         jdbc.update("UPDATE order_book SET estado = 'CANCELLED', updated_at = NOW() WHERE id = ?", listingId);
 
         subtokenService.addPortfolioEntry(userId, subtokenId, remaining.intValue());
+
+        Long projectId = getProjectIdBySubtokenId(subtokenId);
+        String projectName = findProjectNameById(projectId);
+        eventPublisher.publishEvent(new MarketplaceEvent(projectId, null, userId,
+            MarketplaceEvent.Type.CANCELLED, projectName,
+            (BigInteger) listing.get("cantidad"), null, null));
 
         log.info("MKT-03: Listing cancelada id={} seller={}", listingId, userId);
     }
@@ -282,6 +305,18 @@ public class MarketplaceService {
             subtokenId);
         if (rows.isEmpty()) throw new ResourceNotFoundException("Sub-token no encontrado");
         return rows.get(0);
+    }
+
+    private Long getProjectIdBySubtokenId(Long subtokenId) {
+        return jdbc.queryForObject(
+            "SELECT proyecto_id FROM subtokens WHERE id = ?", Long.class, subtokenId
+        );
+    }
+
+    private String findProjectNameById(Long projectId) {
+        return jdbc.queryForObject(
+            "SELECT titulo FROM projects WHERE id = ?", String.class, projectId
+        );
     }
 
     private Map<String, Object> findListingOrThrow(Long listingId) {

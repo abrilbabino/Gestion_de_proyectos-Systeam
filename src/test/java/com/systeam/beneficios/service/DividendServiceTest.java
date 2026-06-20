@@ -14,19 +14,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
+import com.systeam.blockchain.service.IdeaSwapService;
+import com.systeam.notificaciones.event.DividendDistributedEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
 import com.systeam.project.exception.ResourceNotFoundException;
@@ -48,13 +53,16 @@ class DividendServiceTest {
     private BlockchainService blockchainService;
 
     @Mock
-    private com.systeam.blockchain.service.IdeaSwapService ideaSwapService;
+    private IdeaSwapService ideaSwapService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private DividendService service;
 
     @BeforeEach
     void setUp() {
-        service = spy(new DividendService(jdbc, dividendDistributorService, blockchainService, ideaSwapService));
+        service = spy(new DividendService(jdbc, dividendDistributorService, blockchainService, ideaSwapService, eventPublisher));
     }
 
     @Nested
@@ -234,6 +242,7 @@ class DividendServiceTest {
                 argThat(sql -> sql != null && sql.toString().contains("UPDATE users")),
                 eq(new BigDecimal("500.00")), eq(USUARIO_ID)
             );
+            verify(eventPublisher).publishEvent(any(DividendDistributedEvent.class));
         }
 
         @Test
@@ -249,6 +258,7 @@ class DividendServiceTest {
                 argThat(sql -> sql != null && sql.toString().contains("INSERT INTO reclamos_dividendos")),
                 eq(PROYECTO_ID), eq(USUARIO_ID), eq(3L), eq(2), eq(new BigDecimal("50.00"))
             );
+            verify(eventPublisher).publishEvent(any(DividendDistributedEvent.class));
         }
     }
 

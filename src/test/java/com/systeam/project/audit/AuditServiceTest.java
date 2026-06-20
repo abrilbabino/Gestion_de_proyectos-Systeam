@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import com.systeam.notificaciones.event.ProjectAuditedEvent;
 import com.systeam.notificaciones.event.ProjectRejectedEvent;
 import com.systeam.project.audit.dto.AuditFindingRequest;
 import com.systeam.project.audit.dto.AuditFindingResponse;
@@ -93,7 +94,7 @@ class AuditServiceTest {
         return f;
     }
 
-    // U1: submitFinding — APROBADO path — oracle succeeds, no event published
+    // U1: submitFinding — APROBADO path — oracle succeeds, ProjectAuditedEvent published
     @Test
     void u1_submitFinding_aprobado_oracleSucceeds() {
         when(projectRepository.findById(PROYECTO_ID)).thenReturn(Optional.of(buildProyecto("EN_AUDITORIA")));
@@ -107,7 +108,7 @@ class AuditServiceTest {
         assertThat(response.getResultado()).isEqualTo("APROBADO");
         assertThat(response.getTxHash()).isEqualTo("0xABC");
         verify(projectService).updateProjectStatus(PROYECTO_ID, "AUDITADO");
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(eventPublisher).publishEvent(any(ProjectAuditedEvent.class));
     }
 
     // U2: submitFinding — RECHAZADO path — oracle succeeds, event published

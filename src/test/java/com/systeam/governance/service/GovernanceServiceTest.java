@@ -19,11 +19,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
+import com.systeam.notificaciones.event.GovernanceProposalEvent;
 
 @ExtendWith(MockitoExtension.class)
 class GovernanceServiceTest {
@@ -36,13 +38,16 @@ class GovernanceServiceTest {
     @Mock
     private JdbcTemplate jdbc;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private GovernanceService service;
 
     private CreateProposalRequest request;
 
     @BeforeEach
     void setUp() {
-        service = new GovernanceService(jdbc);
+        service = new GovernanceService(jdbc, eventPublisher);
 
         request = new CreateProposalRequest();
         request.setTitle("Actualizar parametros");
@@ -84,6 +89,7 @@ class GovernanceServiceTest {
             assertThat(result.getId()).isEqualTo(PROPOSAL_ID);
             assertThat(result.getStatus()).isEqualTo("ACTIVE");
             verifyUpdateContains("ParameterChange");
+            verify(eventPublisher).publishEvent(any(GovernanceProposalEvent.class));
         }
 
         @Test
@@ -448,6 +454,7 @@ class GovernanceServiceTest {
                                sql.toString().contains("EXECUTED")),
                 eq(executedAt), eq(PROPOSAL_ID)
             );
+            verify(eventPublisher).publishEvent(any(GovernanceProposalEvent.class));
         }
 
         @Test
@@ -460,6 +467,7 @@ class GovernanceServiceTest {
                 argThat(sql -> sql.toString().contains("'EXECUTED'")),
                 eq(executedAt), eq(PROPOSAL_ID)
             );
+            verify(eventPublisher).publishEvent(any(GovernanceProposalEvent.class));
         }
     }
 }

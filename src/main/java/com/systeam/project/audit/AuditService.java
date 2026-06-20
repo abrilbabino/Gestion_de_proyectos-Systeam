@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.notificaciones.event.ProjectAuditedEvent;
 import com.systeam.notificaciones.event.ProjectRejectedEvent;
 import com.systeam.project.audit.dto.AuditFindingRequest;
 import com.systeam.project.audit.dto.AuditFindingResponse;
@@ -86,8 +87,12 @@ public class AuditService {
             : "RECHAZADO";
         projectService.updateProjectStatus(proyectoId, newEstado);
 
-        // 6. Publish event on rejection
-        if (request.getResultado() == ResultadoAuditoria.RECHAZADO) {
+        // 6. Publish event
+        if (request.getResultado() == ResultadoAuditoria.APROBADO) {
+            eventPublisher.publishEvent(
+                new ProjectAuditedEvent(proyectoId, auditorId, ProjectAuditedEvent.Result.APPROVED, saved.getId())
+            );
+        } else if (request.getResultado() == ResultadoAuditoria.RECHAZADO) {
             Long creadorId = proyecto.getCreador() != null ? proyecto.getCreador().getId() : null;
             eventPublisher.publishEvent(
                 new ProjectRejectedEvent(proyectoId, auditorId, saved.getId(), creadorId)

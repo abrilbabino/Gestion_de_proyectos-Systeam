@@ -6,12 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.systeam.blockchain.service.BlockchainService;
+import com.systeam.notificaciones.event.WalletTransferEvent;
 import com.systeam.wallet.dto.TransferTokensRequest;
 import com.systeam.wallet.dto.TransferTokensResponse;
 import com.systeam.wallet.dto.WalletHistoryItem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +31,13 @@ public class WalletService {
 
     private final WalletRepository walletRepository;
     private final BlockchainService blockchainService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public WalletService(WalletRepository walletRepository, BlockchainService blockchainService) {
+    public WalletService(WalletRepository walletRepository, BlockchainService blockchainService,
+                         ApplicationEventPublisher eventPublisher) {
         this.walletRepository = walletRepository;
         this.blockchainService = blockchainService;
+        this.eventPublisher = eventPublisher;
     }
 
     public void syncIdeaBalance(Long userId, BigDecimal balance) {
@@ -76,7 +81,7 @@ public class WalletService {
     }
 
     @Transactional
-    public TransferTokensResponse transferTokens(Long emisorId, TransferTokensRequest request) {
+    public TransferTokensResponse transferTokens(Long emisorId, String emailEmisor, TransferTokensRequest request) {
         Long destinatarioId = request.getDestinatarioId();
         BigDecimal cantidad = request.getCantidad();
         String txHash = request.getTxHash();
@@ -120,7 +125,12 @@ public class WalletService {
         }
 
         walletRepository.debitAndCredit(emisorId, destinatarioId, cantidad);
-        return walletRepository.saveTransfer(emisorId, destinatarioId, cantidad, txHash);
+        TransferTokensResponse response = walletRepository.saveTransfer(emisorId, destinatarioId, cantidad, txHash);
+
+        // Publish event — WalletEventListener handles email dispatch asynchronously
+        eventPublisher.publishEvent(new WalletTransferEvent(emisorId, destinatarioId, cantidad, txHash));
+
+        return response;
     }
 
     public List<TransferTokensResponse> getTransfers(Long userId) {

@@ -7,7 +7,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.systeam.notificaciones.event.ProjectRejectedEvent;
-import com.systeam.notificaciones.repository.JdbcNotificationRepository;
+import com.systeam.notificaciones.service.NotificationService;
 
 /**
  * Persists a notification row after the audit finding transaction commits.
@@ -18,10 +18,10 @@ public class ProjectRejectedEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectRejectedEventListener.class);
 
-    private final JdbcNotificationRepository notificationRepository;
+    private final NotificationService notificationService;
 
-    public ProjectRejectedEventListener(JdbcNotificationRepository notificationRepository) {
-        this.notificationRepository = notificationRepository;
+    public ProjectRejectedEventListener(NotificationService notificationService) {
+        this.notificationService = notificationService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -33,7 +33,13 @@ public class ProjectRejectedEventListener {
                 event.getAuditorId(),
                 event.getFindingId()
             );
-            notificationRepository.insert(event.getCreadorId(), "PROJECT_REJECTED", payload);
+            notificationService.createNotification(
+                event.getCreadorId(),
+                "PROJECT_REJECTED",
+                "Proyecto rechazado",
+                "Tu proyecto ha sido rechazado en la auditar\u00eda.",
+                payload
+            );
             log.info("Notification persisted for rejected project {} (creador={})",
                 event.getProyectoId(), event.getCreadorId());
         } catch (Exception e) {

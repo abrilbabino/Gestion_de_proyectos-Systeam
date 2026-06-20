@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS notificaciones (
     recipient_user_id INTEGER NOT NULL,
     type VARCHAR(50) NOT NULL,
     payload TEXT NOT NULL,
+    title VARCHAR(255),
+    message TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     read_at TIMESTAMP
 );

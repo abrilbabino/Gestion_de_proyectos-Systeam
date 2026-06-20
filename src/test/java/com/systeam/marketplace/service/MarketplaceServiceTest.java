@@ -20,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,6 +30,7 @@ import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaMarketplaceService;
 import com.systeam.marketplace.dto.CreateListingRequest;
 import com.systeam.marketplace.dto.ListingResponse;
+import com.systeam.notificaciones.event.MarketplaceEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.tokenization.service.SubtokenService;
@@ -57,11 +59,14 @@ class MarketplaceServiceTest {
     @Mock
     private BlockchainService blockchainService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private CreateListingRequest createRequest;
 
     @BeforeEach
     void setUp() {
-        service = new MarketplaceService(jdbc, ideaMarketplaceService, subtokenService, blockchainService);
+        service = new MarketplaceService(jdbc, ideaMarketplaceService, subtokenService, blockchainService, eventPublisher);
 
         createRequest = new CreateListingRequest();
         createRequest.setSubtokenId(SUBTOKEN_ID);
@@ -144,6 +149,7 @@ class MarketplaceServiceTest {
             assertThat(result.getId()).isEqualTo(LISTING_ID);
             assertThat(result.getEstado()).isEqualTo("ACTIVE");
             verify(jdbc).update(anyString(), eq(CANTIDAD), eq(SELLER_ID), eq(SUBTOKEN_ID));
+            verify(eventPublisher).publishEvent(any(MarketplaceEvent.class));
         }
 
     // ═════════════════════════════════════════════════════
@@ -217,6 +223,7 @@ class MarketplaceServiceTest {
         verify(jdbc).update(anyString(), any(), eq(BUYER_ID));
         verify(jdbc).update(anyString(), any(), eq(SELLER_ID));
         verify(subtokenService).addPortfolioEntry(eq(BUYER_ID), eq(SUBTOKEN_ID), anyInt());
+        verify(eventPublisher).publishEvent(any(MarketplaceEvent.class));
     }
 
     // ═════════════════════════════════════════════════════
@@ -250,6 +257,7 @@ class MarketplaceServiceTest {
 
         verify(jdbc).update(anyString(), eq(LISTING_ID));
         verify(subtokenService).addPortfolioEntry(eq(SELLER_ID), eq(SUBTOKEN_ID), eq(10));
+        verify(eventPublisher).publishEvent(any(MarketplaceEvent.class));
     }
 
     // ═════════════════════════════════════════════════════

@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.DividendDistributorService;
 import com.systeam.blockchain.service.IdeaSwapService;
+import com.systeam.notificaciones.event.DividendDistributedEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.OracleBillingNotFoundException;
 import com.systeam.project.exception.ResourceNotFoundException;
@@ -28,13 +30,16 @@ public class DividendService {
     private final DividendDistributorService dividendDistributorService;
     private final BlockchainService blockchainService;
     private final IdeaSwapService ideaSwapService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DividendService(JdbcTemplate jdbc, DividendDistributorService dividendDistributorService,
-                           BlockchainService blockchainService, IdeaSwapService ideaSwapService) {
+                           BlockchainService blockchainService, IdeaSwapService ideaSwapService,
+                           ApplicationEventPublisher eventPublisher) {
         this.jdbc = jdbc;
         this.dividendDistributorService = dividendDistributorService;
         this.blockchainService = blockchainService;
         this.ideaSwapService = ideaSwapService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -193,8 +198,8 @@ public class DividendService {
         }
 
         BigDecimal montoPorSubtoken = jdbc.queryForObject(
-            "SELECT COALESCE(monto_por_subtoken, 0) FROM dividendos WHERE proyecto_id = ? " +
-            "ORDER BY created_at DESC LIMIT 1",
+            "SELECT COALESCE((SELECT monto_por_subtoken FROM dividendos WHERE proyecto_id = ? " +
+            "ORDER BY created_at DESC LIMIT 1), 0)",
             BigDecimal.class, proyectoId
         );
 
@@ -219,11 +224,21 @@ public class DividendService {
 
         log.info("Dividendos reclamados: proyecto={}, usuario={}",
                 proyectoId, usuarioId);
+
+        // Calculate total monto and publish event — DividendEventListener handles email
+        BigDecimal montoTotal = BigDecimal.ZERO;
+        for (Map<String, Object> activo : activos) {
+            Integer cantidad = (Integer) activo.get("cantidad");
+            BigDecimal montoRecibido = montoPorSubtoken.multiply(BigDecimal.valueOf(cantidad))
+                    .setScale(2, RoundingMode.HALF_UP);
+            montoTotal = montoTotal.add(montoRecibido);
+        }
+        eventPublisher.publishEvent(new DividendDistributedEvent(proyectoId, usuarioId, montoTotal));
     }
 
     public BigInteger consultarDividendosPendientes(Long proyectoId, String wallet) {
         if (wallet == null || wallet.isBlank()) return BigInteger.ZERO;
-        
+
         try {
             return dividendDistributorService.getClaimable(
                 BigInteger.valueOf(proyectoId), wallet

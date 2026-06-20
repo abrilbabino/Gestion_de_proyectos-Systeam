@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.systeam.notificaciones.event.ProjectStateChangedEvent;
 import com.systeam.project.config.RubroConfig;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
@@ -32,13 +34,16 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final TokenizationService tokenizationService;
     private final JdbcTemplate jdbc;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectService(ProjectRepository projectRepository,
                           TokenizationService tokenizationService,
-                          JdbcTemplate jdbc) {
+                          JdbcTemplate jdbc,
+                          ApplicationEventPublisher eventPublisher) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
         this.jdbc = jdbc;
+        this.eventPublisher = eventPublisher;
     }
 
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
@@ -182,6 +187,8 @@ public class ProjectService {
         }
 
         projectRepository.save(proyecto);
+
+        eventPublisher.publishEvent(new ProjectStateChangedEvent(projectId, currentEstado, newEstado, null));
     }
 
     private void crearSubtokenParaProyecto(Proyecto proyecto) {

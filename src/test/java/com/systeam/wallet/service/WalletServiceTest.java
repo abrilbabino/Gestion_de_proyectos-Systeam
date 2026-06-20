@@ -9,11 +9,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.systeam.blockchain.service.BlockchainService;
+import com.systeam.notificaciones.event.WalletTransferEvent;
+import com.systeam.wallet.dto.TransferTokensRequest;
+import com.systeam.wallet.dto.TransferTokensResponse;
 import com.systeam.wallet.dto.WalletSummaryResponse;
 import com.systeam.wallet.repository.WalletRepository;
 
@@ -28,11 +37,14 @@ class WalletServiceTest {
     @Mock
     private BlockchainService blockchainService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private WalletService service;
 
     @BeforeEach
     void setUp() {
-        service = new WalletService(walletRepository, blockchainService);
+        service = new WalletService(walletRepository, blockchainService, eventPublisher);
     }
 
     @Nested
@@ -121,6 +133,43 @@ class WalletServiceTest {
             assertThat(result.getPortfolio().get(0).getSubtokenNombre()).isEqualTo("UnicoToken");
             assertThat(result.getPortfolio().get(0).getCantidad()).isEqualTo(1);
             assertThat(result.getPortfolio().get(0).getPrecioActual()).isEqualByComparingTo("99.99");
+        }
+    }
+
+    @Nested
+    @DisplayName("transferTokens")
+    class TransferTokens {
+
+        private static final Long DESTINATARIO_ID = 2L;
+        private static final String EMAIL_EMISOR = "emisor@test.com";
+        private static final String EMAIL_DEST = "dest@test.com";
+        private static final String TX_HASH = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        private static final String WALLET_EMISOR = "0x1234567890123456789012345678901234567890";
+
+        @Test
+        @DisplayName("transferencia exitosa — publica WalletTransferEvent, no llama EmailService")
+        void transferExitosa_publicaEvento() throws Exception {
+            TransferTokensRequest request = new TransferTokensRequest();
+            request.setDestinatarioId(DESTINATARIO_ID);
+            request.setCantidad(new BigDecimal("50.00"));
+            request.setTxHash(TX_HASH);
+            request.setWalletEmisor(WALLET_EMISOR);
+
+            when(walletRepository.userExists(DESTINATARIO_ID)).thenReturn(true);
+            when(walletRepository.txHashExists(TX_HASH)).thenReturn(false);
+            doReturn(true).when(blockchainService).verifyTransaction(TX_HASH);
+            doReturn(WALLET_EMISOR).when(blockchainService).getSenderFromTx(TX_HASH);
+            when(walletRepository.findSaldoIdea(USER_ID)).thenReturn(new BigDecimal("100.00"));
+            when(walletRepository.saveTransfer(USER_ID, DESTINATARIO_ID, new BigDecimal("50.00"), TX_HASH))
+                .thenReturn(TransferTokensResponse.builder()
+                    .id(1L).emisorId(USER_ID).destinatarioId(DESTINATARIO_ID)
+                    .cantidad(new BigDecimal("50.00")).txHash(TX_HASH).build());
+
+            TransferTokensResponse result = service.transferTokens(USER_ID, EMAIL_EMISOR, request);
+
+            assertThat(result.getEmisorId()).isEqualTo(USER_ID);
+            assertThat(result.getDestinatarioId()).isEqualTo(DESTINATARIO_ID);
+            verify(eventPublisher).publishEvent(any(WalletTransferEvent.class));
         }
     }
 }

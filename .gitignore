@@ -33,10 +33,14 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-*.atl/
-*.claude/
-
 .vscode/
+
+### Agent / Specs ###
+.atl/
+.claude/
+openspec/
+specs/
+supabase/
 
 .env
 .env.*

@@ -121,6 +121,14 @@ public class WalletRepository {
         );
     }
 
+    public String findEmailById(Long userId) {
+        return jdbc.queryForObject("SELECT email FROM users WHERE id = ?", String.class, userId);
+    }
+
+    public String findNameById(Long userId) {
+        return jdbc.queryForObject("SELECT name FROM users WHERE id = ?", String.class, userId);
+    }
+
     public void updateWalletAddress(Long userId, String walletAddress) {
         jdbc.update("UPDATE users SET wallet_address = ? WHERE id = ?", walletAddress, userId);
     }

@@ -13,14 +13,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.systeam.notificaciones.event.ProjectStateChangedEvent;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -43,13 +44,16 @@ class ProjectServiceTest {
     @Mock
     private JdbcTemplate jdbc;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ProjectService projectService;
 
     private Proyecto proyectoBase;
 
     @BeforeEach
     void setUp() {
-        projectService = new ProjectService(projectRepository, tokenizationService, jdbc);
+        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher);
         Usuario creador = new Usuario();
         creador.setId(1L);
 
@@ -161,6 +165,7 @@ class ProjectServiceTest {
         projectService.updateProjectStatus(1L, "EN_AUDITORIA");
 
         verify(projectRepository).save(any(Proyecto.class));
+        verify(eventPublisher).publishEvent(any(ProjectStateChangedEvent.class));
     }
 
     // FSM Regression: PREPARACION -> FINANCIAMIENTO is now INVALID (breaking change from HU-44)
@@ -183,6 +188,7 @@ class ProjectServiceTest {
         projectService.updateProjectStatus(1L, "AUDITADO");
 
         verify(projectRepository).save(any(Proyecto.class));
+        verify(eventPublisher).publishEvent(any(ProjectStateChangedEvent.class));
     }
 
     @Test
@@ -195,6 +201,7 @@ class ProjectServiceTest {
         projectService.updateProjectStatus(1L, "RECHAZADO");
 
         verify(projectRepository).save(any(Proyecto.class));
+        verify(eventPublisher).publishEvent(any(ProjectStateChangedEvent.class));
     }
 
     @Test
@@ -237,6 +244,7 @@ class ProjectServiceTest {
         projectService.updateProjectStatus(1L, "EJECUCION");
 
         verify(projectRepository).save(any(Proyecto.class));
+        verify(eventPublisher).publishEvent(any(ProjectStateChangedEvent.class));
     }
 
     @Test

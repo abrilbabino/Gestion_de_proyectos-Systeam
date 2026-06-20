@@ -63,7 +63,7 @@ public class WalletController {
     public TransferTokensResponse transfer(
             @AuthenticationPrincipal JwtPrincipal principal,
             @RequestBody @Valid TransferTokensRequest request) {
-        return walletService.transferTokens(principal.userId(), request);
+        return walletService.transferTokens(principal.userId(), principal.email(), request);
     }
 
     @GetMapping("/transfers")

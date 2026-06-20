@@ -30,6 +30,7 @@ import com.systeam.investment.dto.InvestmentResponse;
 import com.systeam.investment.dto.ValidateInvestmentRequest;
 import com.systeam.investment.dto.ValidateInvestmentResponse;
 import com.systeam.investment.repository.InvestmentRepository;
+import com.systeam.notificaciones.event.InvestmentConfirmedEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.investment.service.SmartContractService;
@@ -38,6 +39,8 @@ import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.DynamicPricingService;
 import com.systeam.tokenization.service.SubtokenService;
+
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -57,6 +60,9 @@ class InvestmentServiceTest {
 
     @Mock
     private DynamicPricingService dynamicPricingService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private InvestmentService investmentService;
@@ -264,6 +270,7 @@ class InvestmentServiceTest {
         assertThat(response.getMontoIdea()).isEqualByComparingTo("500.00");
         assertThat(response.getSubTokensRecibidos()).isEqualTo(50);
         assertThat(response.getTxHash()).isEqualTo("0xdef456");
+        verify(eventPublisher).publishEvent(any(InvestmentConfirmedEvent.class));
     }
 
     @Test

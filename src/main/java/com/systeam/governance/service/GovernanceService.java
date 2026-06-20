@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
@@ -16,15 +17,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
+import com.systeam.notificaciones.event.GovernanceProposalEvent;
 
 @Service
 public class GovernanceService {
 
     private final JdbcTemplate jdbc;
+    private final ApplicationEventPublisher eventPublisher;
     private final ProposalRowMapper rowMapper = new ProposalRowMapper();
 
-    public GovernanceService(JdbcTemplate jdbc) {
+    public GovernanceService(JdbcTemplate jdbc, ApplicationEventPublisher eventPublisher) {
         this.jdbc = jdbc;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -43,6 +47,9 @@ public class GovernanceService {
         );
 
         Long id = jdbc.queryForObject("SELECT LASTVAL()", Long.class);
+
+        eventPublisher.publishEvent(new GovernanceProposalEvent(id, userId, GovernanceProposalEvent.Action.CREATED));
+
         return getProposalById(id);
     }
 
@@ -103,6 +110,10 @@ public class GovernanceService {
             "UPDATE proposals SET status = 'EXECUTED', executed_at = ?, updated_at = NOW() WHERE id = ?",
             executedAt, proposalId
         );
+
+        eventPublisher.publishEvent(new GovernanceProposalEvent(
+            proposalId, null, GovernanceProposalEvent.Action.EXECUTED
+        ));
     }
 
     private String proposalTypeName(Integer type) {

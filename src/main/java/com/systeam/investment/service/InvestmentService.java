@@ -20,6 +20,8 @@ import com.systeam.investment.dto.InvestmentResponse;
 import com.systeam.investment.dto.ValidateInvestmentRequest;
 import com.systeam.investment.dto.ValidateInvestmentResponse;
 import com.systeam.investment.repository.InvestmentRepository;
+import com.systeam.notificaciones.event.InvestmentConfirmedEvent;
+import com.systeam.notificaciones.event.ProjectStateChangedEvent;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.investment.service.SmartContractService;
@@ -31,6 +33,8 @@ import com.systeam.tokenization.service.SubtokenService;
 import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.OfferingContractService;
 import java.math.BigInteger;
+
+import org.springframework.context.ApplicationEventPublisher;
 
 @Service
 public class InvestmentService {
@@ -44,6 +48,7 @@ public class InvestmentService {
     private final DynamicPricingService dynamicPricingService;
     private final IdeafyFactoryService ideafyFactoryService;
     private final OfferingContractService offeringContractService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
@@ -51,7 +56,8 @@ public class InvestmentService {
                              SubtokenService subtokenService,
                              DynamicPricingService dynamicPricingService,
                              IdeafyFactoryService ideafyFactoryService,
-                             OfferingContractService offeringContractService) {
+                             OfferingContractService offeringContractService,
+                             ApplicationEventPublisher eventPublisher) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.jdbc = jdbc;
@@ -59,6 +65,7 @@ public class InvestmentService {
         this.dynamicPricingService = dynamicPricingService;
         this.ideafyFactoryService = ideafyFactoryService;
         this.offeringContractService = offeringContractService;
+        this.eventPublisher = eventPublisher;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
@@ -248,6 +255,8 @@ public class InvestmentService {
         if (totalOnChain.compareTo(montoRequerido) >= 0) {
             jdbc.update("UPDATE projects SET estado = 'EJECUCION', updated_at = NOW() WHERE id = ?",
                 request.getProyectoId());
+            eventPublisher.publishEvent(new ProjectStateChangedEvent(
+                request.getProyectoId(), "FINANCIAMIENTO", "EJECUCION", null));
             log.info("Project {} reached funding goal. Transitioned to EJECUCION.", request.getProyectoId());
         }
 
@@ -289,6 +298,8 @@ public class InvestmentService {
         Inversion savedInv = investmentRepository.save(inv);
 
         // Airdrop de Fidelidad eliminado. Se aplica directamente como descuento.
+        eventPublisher.publishEvent(new InvestmentConfirmedEvent(
+            usuarioId, request.getProyectoId(), request.getMontoIdea(), subTokens, txHash));
 
         return toResponse(savedInv);
     }
@@ -347,8 +358,12 @@ public class InvestmentService {
             if (montoRecaudado.compareTo(montoRequerido) < 0) {
                 refundAllInvestors(projectId);
                 jdbc.update("UPDATE projects SET estado = 'RECHAZADO', updated_at = NOW() WHERE id = ?", projectId);
+                eventPublisher.publishEvent(new ProjectStateChangedEvent(
+                    projectId, "FINANCIAMIENTO", "RECHAZADO", null));
             } else {
                 jdbc.update("UPDATE projects SET estado = 'EJECUCION', updated_at = NOW() WHERE id = ?", projectId);
+                eventPublisher.publishEvent(new ProjectStateChangedEvent(
+                    projectId, "FINANCIAMIENTO", "EJECUCION", null));
             }
         }
     }
