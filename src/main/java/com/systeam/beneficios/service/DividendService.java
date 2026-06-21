@@ -162,6 +162,11 @@ public class DividendService {
             throw new ConflictException("El monto a repartir es 0 o menor");
         }
 
+        // IMPORTANTE: Marcar como procesado ANTES del swap para evitar que el scheduler
+        // vuelva a procesar el mismo registro si la operacion blockchain falla a mitad de camino.
+        jdbc.update("UPDATE oracle_billing SET procesado = true WHERE id = ?", billing.get("id"));
+        log.info("oracle_billing id={} marcado como procesado antes del swap", billing.get("id"));
+
         try {
             // 1. Convert montoRepartoUsdc to Wei
             BigInteger usdcWei = montoRepartoUsdc.multiply(BigDecimal.TEN.pow(18)).toBigIntegerExact();
@@ -178,13 +183,41 @@ public class DividendService {
             BigDecimal montoIdea = new BigDecimal(ideaToBuy).divide(BigDecimal.TEN.pow(18));
             Long dividendoId = crearReparto(proyectoId, montoIdea);
 
-            // 5. Update oracle_billing to mark it as processed
-            jdbc.update("UPDATE oracle_billing SET procesado = true WHERE id = ?", billing.get("id"));
-
             return dividendoId;
 
         } catch (Exception e) {
             log.error("Error al ejecutar swap o reparto de dividendos: {}", e.getMessage(), e);
+
+            // Patron "exactly-once": verificar on-chain si los IDEA ya fueron asignados al contrato.
+            // Si el distribute() nunca llego a la blockchain, es seguro volver a false para que
+            // el scheduler lo reintente. Si los IDEA ya estan en el contrato, mantenemos true
+            // para no pagar doble.
+            try {
+                // Consultamos el dividendPerToken del contrato: si es 0, no se distribuyo nada todavia.
+                BigInteger dividendPerToken = dividendDistributorService.getDividendPerToken(BigInteger.valueOf(proyectoId));
+                // Tambien chequeamos si ya habia un dividendo registrado en DB para este proyecto
+                // que corresponda a este billing (si crearReparto() no llego a ejecutarse, no hay registro)
+                Integer dividendosExistentes = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM dividendos WHERE proyecto_id = ? AND created_at >= NOW() - INTERVAL '5 minutes'",
+                    Integer.class, proyectoId
+                );
+
+                boolean ideaAsignadoOnChain = dividendPerToken != null && dividendPerToken.compareTo(BigInteger.ZERO) > 0;
+                boolean dividendoRegistradoEnDb = dividendosExistentes != null && dividendosExistentes > 0;
+
+                if (!ideaAsignadoOnChain && !dividendoRegistradoEnDb) {
+                    // El swap y el distribute fallaron completamente: seguro revertir a false
+                    jdbc.update("UPDATE oracle_billing SET procesado = false WHERE id = ?", billing.get("id"));
+                    log.warn("Rollback oracle_billing id={}: no habia IDEA asignado on-chain ni dividendo en DB. Se volvio a false para reintento.", billing.get("id"));
+                } else {
+                    // Los IDEA ya estan en el contrato o el dividendo fue guardado en DB: mantener true para no pagar doble
+                    log.error("ATENCION: oracle_billing id={} se mantiene como procesado=true porque habia IDEA asignado on-chain (dividendPerToken={}) o dividendo en DB ({}). Revision manual requerida.",
+                        billing.get("id"), dividendPerToken, dividendosExistentes);
+                }
+            } catch (Exception rollbackEx) {
+                log.error("Error al verificar estado on-chain para rollback de oracle_billing id={}: {}. Se mantiene procesado=true por seguridad.", billing.get("id"), rollbackEx.getMessage());
+            }
+
             throw new RuntimeException("Error en proceso de dividendos: " + e.getMessage(), e);
         }
     }

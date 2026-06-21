@@ -11,5 +11,5 @@ public class ValidateInvestmentResponse {
     private Integer cupoDisponible;
     private java.math.BigDecimal precioSubtoken;
     private Integer subTokensARecebir;
-    private Integer descuentoPorcentaje;
+    private java.math.BigDecimal descuentoPorcentaje;
 }

@@ -55,14 +55,36 @@ public class BoostService {
             throw new ConflictException("Error: La transaccion on-chain no fue encontrada o falló");
         }
 
-        executeBoostDbUpdate(proyectoId, usuarioId, txHash);
+        BigDecimal multiplier = getGamificationMultiplier(usuarioId);
+        BigDecimal montoBoostFinal = COSTO_BOOST.multiply(multiplier);
 
-        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain mediante tx {}.",
-                proyectoId, usuarioId, COSTO_BOOST, txHash);
+        executeBoostDbUpdate(proyectoId, usuarioId, txHash, montoBoostFinal);
+
+        log.info("Proyecto {} boosteado por usuario {}. Costo: {} $IDEA on-chain mediante tx {}. Puntos sumados: {}",
+                proyectoId, usuarioId, COSTO_BOOST, txHash, montoBoostFinal);
+    }
+
+    private BigDecimal getGamificationMultiplier(Long usuarioId) {
+        try {
+            String nivelInversor = jdbc.queryForObject(
+                "SELECT nivel_inversor FROM users WHERE id = ?", String.class, usuarioId
+            );
+            
+            if (nivelInversor != null) {
+                switch(nivelInversor.toUpperCase()) {
+                    case "INVESTOR": return new BigDecimal("1.25");
+                    case "PARTNER": return new BigDecimal("2.0");
+                    case "VISIONARY": return new BigDecimal("3.0");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error obteniendo nivel inversor para boost multiplier: {}", e.getMessage());
+        }
+        return BigDecimal.ONE; // STARTER o default
     }
 
     @Transactional
-    protected void executeBoostDbUpdate(Long proyectoId, Long usuarioId, String txHash) {
+    protected void executeBoostDbUpdate(Long proyectoId, Long usuarioId, String txHash, BigDecimal montoBoostFinal) {
         // Insertar registro inmutable de la compra del boost
         jdbc.update("""
             INSERT INTO project_boosts (proyecto_id, usuario_id, tx_hash, monto_gastado, created_at)
@@ -73,7 +95,7 @@ public class BoostService {
             UPDATE projects SET es_destacado = TRUE, fecha_boost = NOW(),
                 monto_boost = monto_boost + ?, updated_at = NOW()
             WHERE id = ? AND deleted_at IS NULL
-            """, COSTO_BOOST, proyectoId);
+            """, montoBoostFinal, proyectoId);
     }
 
     @Transactional

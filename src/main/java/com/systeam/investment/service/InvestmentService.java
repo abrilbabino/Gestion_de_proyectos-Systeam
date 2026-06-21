@@ -96,9 +96,9 @@ public class InvestmentService {
             precioBase, montoRecaudado, montoRequerido
         );
 
-        int descuentoPorcentaje = getLoyaltyDiscountPercentage(usuarioId, request.getProyectoId());
-        if (descuentoPorcentaje > 0) {
-            BigDecimal multiplier = BigDecimal.valueOf(100 - descuentoPorcentaje).divide(BigDecimal.valueOf(100));
+        BigDecimal descuentoPorcentaje = getCrossRewardDiscountPercentage(usuarioId, request.getProyectoId());
+        if (descuentoPorcentaje.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal multiplier = BigDecimal.valueOf(100).subtract(descuentoPorcentaje).divide(BigDecimal.valueOf(100));
             precioSubtoken = precioSubtoken.multiply(multiplier);
         }
 
@@ -204,9 +204,9 @@ public class InvestmentService {
         );
         BigDecimal precioSinDescuento = precioSubtoken;
 
-        int descuentoPorcentaje = getLoyaltyDiscountPercentage(usuarioId, request.getProyectoId());
-        if (descuentoPorcentaje > 0) {
-            BigDecimal multiplier = BigDecimal.valueOf(100 - descuentoPorcentaje).divide(BigDecimal.valueOf(100));
+        BigDecimal descuentoPorcentaje = getCrossRewardDiscountPercentage(usuarioId, request.getProyectoId());
+        if (descuentoPorcentaje.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal multiplier = BigDecimal.valueOf(100).subtract(descuentoPorcentaje).divide(BigDecimal.valueOf(100));
             precioSubtoken = precioSubtoken.multiply(multiplier);
         }
 
@@ -490,7 +490,7 @@ public class InvestmentService {
                 .build();
     }
 
-    private int getLoyaltyDiscountPercentage(Long usuarioId, Long proyectoId) {
+    private BigDecimal getCrossRewardDiscountPercentage(Long usuarioId, Long proyectoId) {
         try {
             Long creadorId = jdbc.queryForObject(
                 "SELECT creador_id FROM projects WHERE id = ?", Long.class, proyectoId
@@ -503,13 +503,32 @@ public class InvestmentService {
                 Integer.class, usuarioId, creadorId
             );
             
-            // TODO: Here we can easily scale tiers (e.g. if > 10 return 15, if > 5 return 10)
             if (pastInvestments != null && pastInvestments > 0) {
-                return 5;
+                // Gamification Cross-Reward Boost
+                String nivelInversor = null;
+                try {
+                    nivelInversor = jdbc.queryForObject(
+                        "SELECT nivel_inversor FROM users WHERE id = ?", String.class, usuarioId
+                    );
+                } catch (Exception ignored) { }
+                
+                BigDecimal baseDiscount = new BigDecimal("5.0");
+                BigDecimal multiplier = BigDecimal.ONE;
+                
+                if (nivelInversor != null) {
+                    switch(nivelInversor.toUpperCase()) {
+                        case "INVESTOR": multiplier = new BigDecimal("1.5"); break; // 7.5%
+                        case "PARTNER": multiplier = new BigDecimal("2.0"); break;  // 10.0%
+                        case "VISIONARY": multiplier = new BigDecimal("3.0"); break; // 15.0%
+                        default: multiplier = BigDecimal.ONE; break; // STARTER: 5.0%
+                    }
+                }
+                
+                return baseDiscount.multiply(multiplier);
             }
         } catch (Exception e) {
-            log.warn("Error calculando descuento de lealtad: {}", e.getMessage());
+            log.warn("Error calculando descuento cross-reward: {}", e.getMessage());
         }
-        return 0;
+        return BigDecimal.ZERO;
     }
 }

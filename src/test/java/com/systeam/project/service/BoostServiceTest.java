@@ -61,7 +61,7 @@ class BoostServiceTest {
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("estado FROM projects")),
                 eq(String.class), eq(PROYECTO_ID)))
-                .thenReturn("RECOLECTANDO");
+                .thenReturn("FINANCIAMIENTO");
 
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("COUNT(*) FROM project_boosts")),
@@ -78,7 +78,7 @@ class BoostServiceTest {
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("estado FROM projects")),
                 eq(String.class), eq(PROYECTO_ID)))
-                .thenReturn("RECOLECTANDO");
+                .thenReturn("FINANCIAMIENTO");
 
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("COUNT(*) FROM project_boosts")),
@@ -97,7 +97,7 @@ class BoostServiceTest {
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("estado FROM projects")),
                 eq(String.class), eq(PROYECTO_ID)))
-                .thenReturn("RECOLECTANDO");
+                .thenReturn("FINANCIAMIENTO");
 
             when(jdbc.queryForObject(
                 argThat(sql -> sql != null && sql.toString().contains("COUNT(*) FROM project_boosts")),
@@ -105,6 +105,12 @@ class BoostServiceTest {
                 .thenReturn(0);
 
             when(smartContractService.verifyBoostTransfer(TX_HASH)).thenReturn(true);
+
+            // Mock gamification level
+            when(jdbc.queryForObject(
+                argThat(sql -> sql != null && sql.toString().contains("nivel_inversor FROM users")),
+                eq(String.class), eq(USUARIO_ID)))
+                .thenReturn("VISIONARY");
 
             service.boostProject(PROYECTO_ID, USUARIO_ID, TX_HASH);
 
@@ -114,7 +120,7 @@ class BoostServiceTest {
             );
             verify(jdbc).update(
                 argThat(sql -> sql != null && sql.toString().contains("UPDATE projects")),
-                eq(new BigDecimal("100.00")), eq(PROYECTO_ID)
+                eq(new BigDecimal("300.000")), eq(PROYECTO_ID)
             );
         }
     }
