@@ -83,6 +83,14 @@ public class ProjectController {
         return projectService.getPublicCatalog(estado, search, PageRequest.of(page, size));
     }
 
+    @GetMapping("/creator/{creatorId}")
+    public Page<ProjectResponse> getPublicProjectsByCreator(
+            @PathVariable Long creatorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return projectService.getPublicProjectsByCreator(creatorId, PageRequest.of(page, size));
+    }
+
     // Cualquier usuario autenticado puede ver sus propios proyectos
     @GetMapping("/my-projects")
     public Page<ProjectResponse> getMyProjects(

@@ -149,6 +149,12 @@ public class ProjectService {
         return projectRepository.findByCreadorId(creadorId, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
+    public Page<ProjectResponse> getPublicProjectsByCreator(Long creadorId, Pageable pageable) {
+        List<String> visibleEstados = List.of("PREPARACION", "FINANCIAMIENTO", "EJECUCION", "AUDITADO", "FINALIZADO");
+        return projectRepository.findByCreadorIdAndFilters(creadorId, visibleEstados, pageable)
+                .map(p -> toResponse(p, obtenerSimbolo(p.getId())));
+    }
+
     @Transactional
     public void updateProjectStatus(Long projectId, String newEstado) {
         Proyecto proyecto = findProjectOrThrow(projectId);
@@ -175,9 +181,9 @@ public class ProjectService {
             if (proyecto.getValorNominalToken() != null && proyecto.getCupoMaximoTokens() != null) {
                 BigDecimal recaudacionMaxima = proyecto.getValorNominalToken()
                     .multiply(BigDecimal.valueOf(proyecto.getCupoMaximoTokens()));
-                if (recaudacionMaxima.compareTo(proyecto.getMontoRequerido()) < 0) {
-                    throw new ConflictException("No se puede publicar el proyecto: el valor total de los subtokens (" + recaudacionMaxima + ") es menor a la meta de financiamiento (" + proyecto.getMontoRequerido() + ")");
-                }
+                  if (recaudacionMaxima.compareTo(proyecto.getMontoRequerido()) != 0) {
+                      throw new ConflictException("No se puede publicar el proyecto: el valor total de los subtokens (" + recaudacionMaxima + ") debe ser exactamente igual a la meta de financiamiento (" + proyecto.getMontoRequerido() + ")");
+                  }
             }
 
             if (proyecto.getPlazo() == null) {

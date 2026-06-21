@@ -168,19 +168,19 @@ public class OracleBillingEventService {
                 .divide(BigDecimal.TEN.pow(18));
 
             // Deduplication via UNIQUE constraint on oracle_billing.tx_hash
-            Integer yaEnBilling = jdbc.queryForObject(
+            Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM oracle_billing WHERE tx_hash = ?",
                 Integer.class, oracleTxHash
             );
-            if (yaEnBilling != null && yaEnBilling > 0) {
+            if (count != null && count > 0) {
                 log.warn("oracleTxHash ya registrado en oracle_billing: {}", oracleTxHash);
                 return;
             }
 
             jdbc.update("""
                 INSERT INTO oracle_billing
-                    (proyecto_id, monto_facturado, fecha_reporte, oracle_address, tx_hash)
-                VALUES (?, ?, to_timestamp(?), ?, ?)
+                (proyecto_id, monto_facturado, fecha_reporte, oracle_address, tx_hash, procesado)
+                VALUES (?, ?, to_timestamp(?), ?, ?, FALSE)
                 """,
                 proyectoId.longValue(),
                 montoFacturado,

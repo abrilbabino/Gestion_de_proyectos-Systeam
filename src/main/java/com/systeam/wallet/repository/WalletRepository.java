@@ -68,7 +68,7 @@ public class WalletRepository {
             UNION ALL
 
             SELECT 'DIVIDENDO' AS tipo, monto_recibido AS monto, cantidad_subtokens AS cantidad,
-                   NULL AS tx_hash, 'Cobro de dividendos' AS descripcion, reclamado_en AS fecha
+                   tx_hash, 'Cobro de dividendos' AS descripcion, reclamado_en AS fecha
             FROM reclamos_dividendos WHERE usuario_id = ?
 
             UNION ALL

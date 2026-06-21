@@ -212,6 +212,40 @@ public class JdbcProjectRepository implements ProjectRepository {
     }
 
     @Override
+    public Page<Proyecto> findByCreadorIdAndFilters(Long creadorId, List<String> estados, Pageable pageable) {
+        StringBuilder where = new StringBuilder("deleted_at IS NULL AND creador_id = ?");
+        List<Object> params = new ArrayList<>();
+        params.add(creadorId);
+
+        if (estados != null && !estados.isEmpty()) {
+            where.append(" AND estado IN (");
+            for (int i = 0; i < estados.size(); i++) {
+                where.append("?");
+                if (i < estados.size() - 1) where.append(",");
+                params.add(estados.get(i));
+            }
+            where.append(")");
+        }
+
+        Long total = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM projects WHERE " + where.toString(),
+            Long.class, params.toArray()
+        );
+
+        String sql = "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +
+            "gobernanza_comunidad, cupo_maximo_tokens, valor_nominal_token, monto_recaudado, " +
+            "rubro, es_destacado, fecha_boost, monto_boost, " +
+            "created_at, updated_at, deleted_at FROM projects WHERE " + where.toString() +
+            " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        
+        params.add(pageable.getPageSize());
+        params.add(pageable.getOffset());
+
+        List<Proyecto> list = jdbc.query(sql, rowMapper, params.toArray());
+        return new PageImpl<>(list, pageable, total != null ? total : 0L);
+    }
+
+    @Override
     public List<Proyecto> findProjectsInFinancing() {
         return jdbc.query(
             "SELECT id, creador_id, titulo, descripcion, monto_requerido, plazo, estado, " +

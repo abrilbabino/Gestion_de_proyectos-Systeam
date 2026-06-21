@@ -97,8 +97,8 @@ public class OracleBillingService {
 
             jdbc.update("""
                 INSERT INTO oracle_billing
-                    (proyecto_id, monto_facturado, fecha_reporte, oracle_address, tx_hash)
-                VALUES (?, ?, NOW(), ?, ?)
+                (proyecto_id, monto_facturado, fecha_reporte, oracle_address, tx_hash, procesado)
+                VALUES (?, ?, NOW(), ?, ?, false)
                 """,
                 proyectoId,
                 monto,

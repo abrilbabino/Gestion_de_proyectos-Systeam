@@ -14,5 +14,6 @@ public interface ProjectRepository {
     Page<Proyecto> findAll(Pageable pageable);
     Page<Proyecto> findByCreadorId(Long creadorId, Pageable pageable);
     Page<Proyecto> findByFilters(List<String> estados, String search, Pageable pageable);
+    Page<Proyecto> findByCreadorIdAndFilters(Long creadorId, List<String> estados, Pageable pageable);
     List<Proyecto> findProjectsInFinancing();
 }
