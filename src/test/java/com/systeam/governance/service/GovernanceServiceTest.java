@@ -26,6 +26,9 @@ import org.springframework.jdbc.core.RowMapper;
 import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
 import com.systeam.notificaciones.event.GovernanceProposalEvent;
+import com.systeam.rewards.service.RewardService;
+import com.systeam.voteeconomics.VoteEconomicsConfigService;
+import com.systeam.wallet.service.WalletService;
 
 @ExtendWith(MockitoExtension.class)
 class GovernanceServiceTest {
@@ -41,13 +44,26 @@ class GovernanceServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private WalletService walletService;
+
+    @Mock
+    private RewardService rewardService;
+
+    @Mock
+    private VoteEconomicsConfigService configService;
+
+    @Mock
+    private VoteStreamRegistry voteStreamRegistry;
+
     private GovernanceService service;
 
     private CreateProposalRequest request;
 
     @BeforeEach
     void setUp() {
-        service = new GovernanceService(jdbc, eventPublisher);
+        service = new GovernanceService(jdbc, eventPublisher, walletService,
+                rewardService, configService, voteStreamRegistry);
 
         request = new CreateProposalRequest();
         request.setTitle("Actualizar parametros");
@@ -147,7 +163,8 @@ class GovernanceServiceTest {
             verify(jdbc).update(
                 argThat(sql -> sql.toString().contains("INSERT INTO proposals")),
                 eq(WALLET), eq(USER_ID), eq("Actualizar parametros"), eq("Cambiar el ratio de conversion"),
-                eq("ParameterChange"), eq("extra data"), any(LocalDateTime.class), eq(TX_HASH)
+                eq("ParameterChange"), eq("extra data"), eq(null),
+                any(LocalDateTime.class), eq(TX_HASH)
             );
         }
 
@@ -161,7 +178,8 @@ class GovernanceServiceTest {
             verify(jdbc).update(
                 argThat(sql -> sql.toString().contains("INSERT INTO proposals")),
                 eq(WALLET), eq(USER_ID), eq("Actualizar parametros"), eq("Cambiar el ratio de conversion"),
-                eq("ParameterChange"), eq(null), any(LocalDateTime.class), eq(TX_HASH)
+                eq("ParameterChange"), eq(null), eq(null),
+                any(LocalDateTime.class), eq(TX_HASH)
             );
         }
 
@@ -179,7 +197,8 @@ class GovernanceServiceTest {
             verify(jdbc).update(
                 argThat(sql -> sql.toString().contains("INSERT INTO proposals")),
                 eq(WALLET), eq(USER_ID), eq("Actualizar parametros"), eq("Cambiar el ratio de conversion"),
-                eq(typeName), eq(null), any(LocalDateTime.class), eq(TX_HASH)
+                eq(typeName), eq(null), eq(null),
+                any(LocalDateTime.class), eq(TX_HASH)
             );
         }
     }

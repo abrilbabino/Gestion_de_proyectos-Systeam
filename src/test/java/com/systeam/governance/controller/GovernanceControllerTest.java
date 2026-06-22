@@ -7,7 +7,10 @@ import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
 import com.systeam.governance.dto.VoteRequest;
 import com.systeam.governance.service.GovernanceService;
+import com.systeam.governance.service.VoteStreamRegistry;
 import com.systeam.security.JwtPrincipal;
+import com.systeam.voteeconomics.VoteEconomicsConfig;
+import com.systeam.voteeconomics.VoteEconomicsConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigInteger;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,6 +48,8 @@ class GovernanceControllerTest {
     @MockBean private BlockchainService blockchainService;
     @MockBean private IdeaGovernanceService onChainService;
     @MockBean private GovernanceService offChainService;
+    @MockBean private VoteStreamRegistry voteStreamRegistry;
+    @MockBean private VoteEconomicsConfigService voteEconomicsConfigService;
 
     @BeforeEach
     void setup() {
@@ -109,7 +117,7 @@ class GovernanceControllerTest {
 
     @Test
     @WithMockUser(authorities = "governance:vote")
-    void vote_conPermiso_retorna200() throws Exception {
+    void vote_conPermiso_retorna200YRecordaEconomics() throws Exception {
         when(onChainService.vote(any(), any())).thenReturn("0xtx");
 
         VoteRequest request = new VoteRequest();
@@ -121,6 +129,28 @@ class GovernanceControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk());
+
+        verify(offChainService).validateVoteCost(anyLong());
+        verify(offChainService).recordVoteEconomics(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    @WithMockUser(authorities = "governance:vote")
+    void vote_saldoInsuficiente_noEnviaTransaccionOnChain() throws Exception {
+        org.mockito.Mockito.doThrow(new com.systeam.project.exception.ConflictException("Saldo insuficiente para realizar la operación"))
+            .when(offChainService).validateVoteCost(anyLong());
+
+        VoteRequest request = new VoteRequest();
+        request.setProposalId(1L);
+        request.setSupport(true);
+
+        mockMvc.perform(post("/api/governance/vote")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+
+        verify(onChainService, org.mockito.Mockito.never()).vote(any(), any());
     }
 
     @Test
@@ -170,5 +200,28 @@ class GovernanceControllerTest {
     void getCount_conPermiso_retorna200() throws Exception {
         mockMvc.perform(get("/api/governance/count"))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "governance:read")
+    void getConfig_retorna200() throws Exception {
+        when(voteEconomicsConfigService.loadConfig())
+            .thenReturn(new VoteEconomicsConfig(java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(5), null));
+
+        mockMvc.perform(get("/api/governance/config"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser
+    void voteStream_retorna200ConEventStream() throws Exception {
+        when(voteStreamRegistry.subscribe(42L))
+            .thenReturn(new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(30000L));
+
+        mockMvc.perform(get("/api/governance/proposals/42/votes/stream")
+                .accept(MediaType.TEXT_EVENT_STREAM))
+            .andExpect(status().isOk());
+
+        verify(voteStreamRegistry).subscribe(42L);
     }
 }

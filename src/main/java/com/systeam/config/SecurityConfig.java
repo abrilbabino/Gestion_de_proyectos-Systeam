@@ -70,6 +70,8 @@ public class SecurityConfig {
                 // Endpoints públicos (no requieren token)
                 .requestMatchers(HttpMethod.GET, "/api/projects/catalog").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/modules/status").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/governance/proposals/*/votes/stream").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/projects/*/votes/stream").permitAll()
                 .requestMatchers("/estado.html", "/static/**", "/css/**", "/js/**").permitAll()
                 // Todo lo demás requiere estar autenticado (+ @PreAuthorize en el controller)
                 .anyRequest().authenticated()

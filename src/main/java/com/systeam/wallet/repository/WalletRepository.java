@@ -147,6 +147,10 @@ public class WalletRepository {
         return count != null && count > 0;
     }
 
+    public void adjustSaldoIdea(Long userId, BigDecimal signedAmount) {
+        jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", signedAmount, userId);
+    }
+
     public void debitAndCredit(Long fromUserId, Long toUserId, BigDecimal amount) {
         jdbc.update("UPDATE users SET saldo_idea = saldo_idea - ? WHERE id = ?", amount, fromUserId);
         jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", amount, toUserId);

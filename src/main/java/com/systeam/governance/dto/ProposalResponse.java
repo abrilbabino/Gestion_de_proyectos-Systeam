@@ -20,6 +20,7 @@ public class ProposalResponse {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private LocalDateTime executedAt;
+    private Long projectId;
     private String txHash;
     private LocalDateTime createdAt;
 
@@ -55,6 +56,8 @@ public class ProposalResponse {
     public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
     public LocalDateTime getExecutedAt() { return executedAt; }
     public void setExecutedAt(LocalDateTime executedAt) { this.executedAt = executedAt; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
     public String getTxHash() { return txHash; }
     public void setTxHash(String txHash) { this.txHash = txHash; }
     public LocalDateTime getCreatedAt() { return createdAt; }

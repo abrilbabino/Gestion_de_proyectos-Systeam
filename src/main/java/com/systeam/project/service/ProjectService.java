@@ -210,6 +210,20 @@ public class ProjectService {
         );
     }
 
+    private long[] obtenerVotos(Long projectId) {
+        try {
+            return jdbc.queryForObject(
+                "SELECT for_votes, against_votes, total_votes FROM projects WHERE id = ?",
+                (rs, rowNum) -> new long[]{
+                    rs.getBigDecimal("for_votes").longValue(),
+                    rs.getBigDecimal("against_votes").longValue(),
+                    rs.getBigDecimal("total_votes").longValue()
+                }, projectId);
+        } catch (Exception e) {
+            return new long[]{0, 0, 0};
+        }
+    }
+
     private String obtenerSimbolo(Long projectId) {
         try {
             return jdbc.queryForObject("SELECT simbolo FROM projects WHERE id = ?", String.class, projectId);
@@ -265,6 +279,7 @@ public class ProjectService {
     }
 
     private ProjectResponse toResponse(Proyecto proyecto, String simbolo) {
+        long[] votos = obtenerVotos(proyecto.getId());
         return ProjectResponse.builder()
                 .id(proyecto.getId())
                 .titulo(proyecto.getTitulo())
@@ -284,6 +299,9 @@ public class ProjectService {
                 .fechaBoost(proyecto.getFechaBoost())
                 .montoBoost(proyecto.getMontoBoost())
                 .rubro(proyecto.getRubro())
+                .forVotes(votos[0])
+                .againstVotes(votos[1])
+                .totalVotes(votos[2])
                 .build();
     }
 }

@@ -133,6 +133,24 @@ public class WalletService {
         return response;
     }
 
+    public void checkSufficientBalance(Long userId, BigDecimal requiredAmount) {
+        BigDecimal currentBalance = walletRepository.findSaldoIdea(userId);
+        if (currentBalance == null || currentBalance.compareTo(requiredAmount) < 0) {
+            throw new ConflictException("Saldo insuficiente para realizar la operación");
+        }
+    }
+
+    @Transactional
+    public void adjustBalance(Long userId, BigDecimal signedAmount) {
+        if (signedAmount.signum() < 0) {
+            BigDecimal currentBalance = walletRepository.findSaldoIdea(userId);
+            if (currentBalance == null || currentBalance.add(signedAmount).signum() < 0) {
+                throw new ConflictException("Saldo insuficiente para realizar la operación");
+            }
+        }
+        walletRepository.adjustSaldoIdea(userId, signedAmount);
+    }
+
     public List<TransferTokensResponse> getTransfers(Long userId) {
         return walletRepository.findTransfersByUser(userId);
     }

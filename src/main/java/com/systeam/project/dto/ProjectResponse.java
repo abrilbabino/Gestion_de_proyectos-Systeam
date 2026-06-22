@@ -27,4 +27,10 @@ public class ProjectResponse {
     private LocalDateTime fechaBoost;
     private BigDecimal montoBoost;
     private Integer rubro;
+    @Builder.Default
+    private Long forVotes = 0L;
+    @Builder.Default
+    private Long againstVotes = 0L;
+    @Builder.Default
+    private Long totalVotes = 0L;
 }

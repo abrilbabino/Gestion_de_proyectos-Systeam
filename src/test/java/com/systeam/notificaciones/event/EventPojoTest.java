@@ -98,4 +98,28 @@ class EventPojoTest {
         assertThat(event.getCantidad()).isEqualByComparingTo(new BigDecimal("500.00"));
         assertThat(event.getTxHash()).isEqualTo("0xdef456");
     }
+
+    // ---- 1.8 VoteRewardedEvent ----
+
+    @Test
+    void voteRewardedEvent_createsAndReturnsFields() {
+        var event = new VoteRewardedEvent(10L, 42L, new BigDecimal("1.0"), new BigDecimal("0.5"), "0xvote123");
+
+        assertThat(event.getUserId()).isEqualTo(10L);
+        assertThat(event.getProposalId()).isEqualTo(42L);
+        assertThat(event.getCost()).isEqualByComparingTo(new BigDecimal("1.0"));
+        assertThat(event.getReward()).isEqualByComparingTo(new BigDecimal("0.5"));
+        assertThat(event.getTxHash()).isEqualTo("0xvote123");
+    }
+
+    // ---- 1.9 EventRewardedEvent ----
+
+    @Test
+    void eventRewardedEvent_createsAndReturnsFields() {
+        var event = new EventRewardedEvent(3L, 7L, new BigDecimal("20.0"));
+
+        assertThat(event.getUserId()).isEqualTo(3L);
+        assertThat(event.getEventoId()).isEqualTo(7L);
+        assertThat(event.getReward()).isEqualByComparingTo(new BigDecimal("20.0"));
+    }
 }

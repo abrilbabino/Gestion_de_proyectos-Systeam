@@ -21,12 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 import com.systeam.project.dto.BoostProjectRequest;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.ProjectResponse;
+import com.systeam.project.dto.ProjectVoteRequest;
 import com.systeam.project.dto.UpdateProjectRequest;
 import com.systeam.project.service.BoostService;
 import com.systeam.project.service.ProjectService;
+import com.systeam.project.service.ProjectVoteService;
+import com.systeam.project.service.ProjectVoteStreamRegistry;
 import com.systeam.security.JwtPrincipal;
 
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -34,10 +39,16 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final BoostService boostService;
+    private final ProjectVoteService projectVoteService;
+    private final ProjectVoteStreamRegistry projectVoteStreamRegistry;
 
-    public ProjectController(ProjectService projectService, BoostService boostService) {
+    public ProjectController(ProjectService projectService, BoostService boostService,
+                             ProjectVoteService projectVoteService,
+                             ProjectVoteStreamRegistry projectVoteStreamRegistry) {
         this.projectService = projectService;
         this.boostService = boostService;
+        this.projectVoteService = projectVoteService;
+        this.projectVoteStreamRegistry = projectVoteStreamRegistry;
     }
 
     // Solo CREATOR y ADMIN tienen el permiso project:create
@@ -123,6 +134,24 @@ public class ProjectController {
             @RequestBody @Valid BoostProjectRequest request,
             @AuthenticationPrincipal JwtPrincipal principal) {
         boostService.boostProject(id, principal.userId(), request.getTxHash());
+    }
+
+    @PostMapping("/{id}/vote")
+    @PreAuthorize("hasAuthority('governance:vote')")
+    public String voteProject(@PathVariable Long id,
+                              @RequestBody @Valid ProjectVoteRequest request,
+                              @AuthenticationPrincipal JwtPrincipal user) {
+        projectVoteService.validateVote(user.userId(), id);
+        try {
+            return projectVoteService.vote(user.userId(), id, request.getSupport());
+        } catch (Exception e) {
+            throw new RuntimeException("Error al votar proyecto: " + e.getMessage(), e);
+        }
+    }
+
+    @GetMapping(value = "/{id}/votes/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter projectVoteStream(@PathVariable Long id) {
+        return projectVoteStreamRegistry.subscribe(id);
     }
 
     @PostMapping("/evaluate-states")

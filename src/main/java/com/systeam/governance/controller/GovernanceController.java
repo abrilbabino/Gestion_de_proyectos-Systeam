@@ -3,7 +3,10 @@ package com.systeam.governance.controller;
 import java.math.BigInteger;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.blockchain.service.IdeaGovernanceService;
@@ -21,7 +25,10 @@ import com.systeam.governance.dto.CreateProposalRequest;
 import com.systeam.governance.dto.ProposalResponse;
 import com.systeam.governance.dto.VoteRequest;
 import com.systeam.governance.service.GovernanceService;
+import com.systeam.governance.service.VoteStreamRegistry;
 import com.systeam.security.JwtPrincipal;
+import com.systeam.voteeconomics.VoteEconomicsConfig;
+import com.systeam.voteeconomics.VoteEconomicsConfigService;
 
 import jakarta.validation.Valid;
 
@@ -29,16 +36,24 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/governance")
 public class GovernanceController {
 
+    private static final Logger log = LoggerFactory.getLogger(GovernanceController.class);
+
     private final BlockchainService blockchainService;
     private final IdeaGovernanceService onChainService;
     private final GovernanceService offChainService;
+    private final VoteStreamRegistry voteStreamRegistry;
+    private final VoteEconomicsConfigService voteEconomicsConfigService;
 
     public GovernanceController(BlockchainService blockchainService,
                                  IdeaGovernanceService onChainService,
-                                 GovernanceService offChainService) {
+                                 GovernanceService offChainService,
+                                 VoteStreamRegistry voteStreamRegistry,
+                                 VoteEconomicsConfigService voteEconomicsConfigService) {
         this.blockchainService = blockchainService;
         this.onChainService = onChainService;
         this.offChainService = offChainService;
+        this.voteStreamRegistry = voteStreamRegistry;
+        this.voteEconomicsConfigService = voteEconomicsConfigService;
     }
 
     @PostMapping("/proposals")
@@ -68,16 +83,40 @@ public class GovernanceController {
 
     @PostMapping("/vote")
     @PreAuthorize("hasAuthority('governance:vote')")
-    public String vote(@RequestBody @Valid VoteRequest request) {
+    public String vote(@RequestBody @Valid VoteRequest request,
+                       @AuthenticationPrincipal JwtPrincipal user) {
+        offChainService.validateVoteCost(user.userId());
+
         try {
             String txHash = onChainService.vote(
                 BigInteger.valueOf(request.getProposalId()),
                 request.getSupport()
             );
+            offChainService.recordVoteEconomics(user.userId(), request.getProposalId(), txHash);
             return txHash;
         } catch (Exception e) {
             throw new RuntimeException("Error al votar: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * SSE endpoint for real-time vote count updates on a proposal.
+     * Public (no auth required) — read-only stream of vote tallies.
+     */
+    @GetMapping(value = "/proposals/{id}/votes/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter voteStream(@PathVariable Long id) {
+        log.info("SSE subscription for proposalId={}", id);
+        return voteStreamRegistry.subscribe(id);
+    }
+
+    /**
+     * Returns the current vote economics configuration (cost, reward, treasury).
+     * The frontend uses this to display how much a vote costs and rewards.
+     */
+    @GetMapping("/config")
+    @PreAuthorize("hasAuthority('governance:read')")
+    public VoteEconomicsConfig getConfig() {
+        return voteEconomicsConfigService.loadConfig();
     }
 
     @PostMapping("/proposals/{id}/execute")
