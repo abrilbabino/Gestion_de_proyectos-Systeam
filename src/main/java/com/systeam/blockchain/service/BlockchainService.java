@@ -126,12 +126,12 @@ public class BlockchainService {
     }
 
     public boolean verifyTransaction(String txHash) throws Exception {
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 30; i++) {
             var receipt = web3j.ethGetTransactionReceipt(txHash).send();
             if (receipt.getTransactionReceipt().isPresent()) {
                 return receipt.getTransactionReceipt().get().getStatus().equals("0x1");
             }
-            if (i < 14) Thread.sleep(2000);
+            if (i < 29) Thread.sleep(4000);
         }
         return false;
     }
