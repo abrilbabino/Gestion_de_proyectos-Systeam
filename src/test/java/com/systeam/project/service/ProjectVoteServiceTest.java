@@ -198,35 +198,27 @@ class ProjectVoteServiceTest {
         @Test
         @DisplayName("uses existing on-chain proposal ID")
         void existingOnChainProposal() throws Exception {
-            when(voteRepository.getOnChainProposalId(PROJECT_ID)).thenReturn(5L);
-            when(onChainService.vote(BigInteger.valueOf(5L), true)).thenReturn(TX_HASH);
             when(configService.loadConfig())
                     .thenReturn(new VoteEconomicsConfig(VOTE_COST, VOTE_REWARD, TREASURY_USER_ID));
             when(voteRepository.getVoteCounts(PROJECT_ID)).thenReturn(new long[]{1, 0, 1});
 
-            String result = service.vote(USER_ID, PROJECT_ID, true);
+            String result = service.vote(USER_ID, PROJECT_ID, true, TX_HASH);
 
             assertThat(result).isEqualTo(TX_HASH);
-            verify(onChainService, never()).createProposal(any(), any(), any());
+            verify(onChainService, never()).vote(any(), any());
         }
 
         @Test
-        @DisplayName("creates on-chain proposal on first vote")
-        void createsOnChainProposal() throws Exception {
-            when(voteRepository.getOnChainProposalId(PROJECT_ID)).thenReturn(null);
-            when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(projectInState("EJECUCION")));
-            when(onChainService.createProposal(any(), eq(0), any())).thenReturn("0xcreate");
-            when(blockchainService.verifyTransaction("0xcreate")).thenReturn(true);
-            when(onChainService.getProposalCount()).thenReturn(BigInteger.valueOf(7));
-            when(onChainService.vote(BigInteger.valueOf(7L), true)).thenReturn(TX_HASH);
+        @DisplayName("records vote with txHash from client")
+        void recordsVoteWithClientTxHash() throws Exception {
             when(configService.loadConfig())
                     .thenReturn(new VoteEconomicsConfig(VOTE_COST, VOTE_REWARD, TREASURY_USER_ID));
             when(voteRepository.getVoteCounts(PROJECT_ID)).thenReturn(new long[]{1, 0, 1});
 
-            String result = service.vote(USER_ID, PROJECT_ID, true);
+            String result = service.vote(USER_ID, PROJECT_ID, true, TX_HASH);
 
             assertThat(result).isEqualTo(TX_HASH);
-            verify(voteRepository).setOnChainProposalId(PROJECT_ID, 7L);
+            verify(voteRepository).insertVote(PROJECT_ID, USER_ID, true, TX_HASH);
         }
     }
 }

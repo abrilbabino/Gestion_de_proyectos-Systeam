@@ -70,13 +70,8 @@ public class ProjectVoteService {
         }
     }
 
-    public String vote(Long userId, Long projectId, boolean support) throws Exception {
-        Long onChainProposalId = getOrCreateOnChainProposal(projectId);
-
-        String txHash = onChainService.vote(BigInteger.valueOf(onChainProposalId), support);
-
+    public String vote(Long userId, Long projectId, boolean support, String txHash) throws Exception {
         recordVote(userId, projectId, support, txHash);
-
         return txHash;
     }
 
@@ -107,7 +102,7 @@ public class ProjectVoteService {
                 userId, projectId, support, cost, reward, txHash);
     }
 
-    private synchronized Long getOrCreateOnChainProposal(Long projectId) throws Exception {
+    public synchronized Long getOrCreateOnChainProposal(Long projectId) throws Exception {
         Long existing = voteRepository.getOnChainProposalId(projectId);
         if (existing != null) {
             return existing;

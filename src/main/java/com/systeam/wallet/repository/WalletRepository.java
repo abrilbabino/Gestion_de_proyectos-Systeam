@@ -89,12 +89,32 @@ public class WalletRepository {
             SELECT 'TRANSFERENCIA_RECIBIDA' AS tipo, cantidad AS monto, NULL AS cantidad,
                    tx_hash AS tx_hash, 'Transferencia recibida' AS descripcion, created_at AS fecha
             FROM token_transfers WHERE destinatario_id = ?
+
+            UNION ALL
+
+            SELECT 'VOTO' AS tipo,
+                   (SELECT vote_cost FROM vote_economics_config WHERE id = 1) AS monto,
+                   NULL AS cantidad,
+                   pv.tx_hash,
+                   ('Voto ' || CASE WHEN pv.support THEN 'a favor' ELSE 'en contra' END || ' — ' || (SELECT titulo FROM projects WHERE id = pv.project_id)) AS descripcion,
+                   pv.created_at AS fecha
+            FROM project_votes pv WHERE pv.user_id = ?
+
+            UNION ALL
+
+            SELECT 'VOTO_RECOMPENSA' AS tipo,
+                   rl.amount AS monto,
+                   NULL AS cantidad,
+                   rl.tx_hash,
+                   ('Recompensa de voto — ' || (SELECT titulo FROM projects WHERE id = rl.ref_id)) AS descripcion,
+                   rl.created_at AS fecha
+            FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'VOTE_REWARD'
         ) historial
         WHERE 1=1
         """;
 
         List<Object> params = new ArrayList<>(List.of(
-            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
+            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
         ));
 
         if (desde != null) {

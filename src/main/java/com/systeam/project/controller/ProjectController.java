@@ -1,6 +1,7 @@
 package com.systeam.project.controller;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -136,6 +137,19 @@ public class ProjectController {
         boostService.boostProject(id, principal.userId(), request.getTxHash());
     }
 
+    @GetMapping("/{id}/vote/prepare")
+    @PreAuthorize("hasAuthority('governance:vote')")
+    public Map<String, Object> prepareVote(@PathVariable Long id,
+                              @AuthenticationPrincipal JwtPrincipal user) {
+        projectVoteService.validateVote(user.userId(), id);
+        try {
+            Long onChainProposalId = projectVoteService.getOrCreateOnChainProposal(id);
+            return Map.of("onChainProposalId", onChainProposalId);
+        } catch (Exception e) {
+            throw new RuntimeException("Error preparing vote: " + e.getMessage(), e);
+        }
+    }
+
     @PostMapping("/{id}/vote")
     @PreAuthorize("hasAuthority('governance:vote')")
     public String voteProject(@PathVariable Long id,
@@ -143,7 +157,7 @@ public class ProjectController {
                               @AuthenticationPrincipal JwtPrincipal user) {
         projectVoteService.validateVote(user.userId(), id);
         try {
-            return projectVoteService.vote(user.userId(), id, request.getSupport());
+            return projectVoteService.vote(user.userId(), id, request.getSupport(), request.getTxHash());
         } catch (Exception e) {
             throw new RuntimeException("Error al votar proyecto: " + e.getMessage(), e);
         }

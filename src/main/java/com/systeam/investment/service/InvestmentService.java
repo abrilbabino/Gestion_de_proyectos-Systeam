@@ -296,7 +296,7 @@ public class InvestmentService {
         inv.setSubTokensRecibidos(subTokens);
         inv.setTxHash(txHash);
         inv.setEstado("CONFIRMADA");
-        inv.setDescuentoPorcentaje(descuentoPorcentaje);
+        inv.setDescuentoPorcentaje(descuentoPorcentaje.intValue());
 
         Inversion savedInv = investmentRepository.save(inv);
 
@@ -484,7 +484,7 @@ public class InvestmentService {
                 .precioSubtoken(precioSubtoken)
                 .txHash(inv.getTxHash())
                 .estado(inv.getEstado())
-                .descuentoPorcentaje(inv.getDescuentoPorcentaje())
+                .descuentoPorcentaje(inv.getDescuentoPorcentaje() != null ? BigDecimal.valueOf(inv.getDescuentoPorcentaje()) : null)
                 .createdAt(inv.getCreatedAt())
                 .updatedAt(inv.getUpdatedAt())
                 .build();

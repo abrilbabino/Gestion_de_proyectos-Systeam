@@ -169,11 +169,13 @@ class ProjectControllerTest {
         @WithMockUser(authorities = "governance:vote")
         void conPermisoVote_retorna200() throws Exception {
             org.mockito.Mockito.when(projectVoteService.vote(org.mockito.ArgumentMatchers.anyLong(),
-                    org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean()))
+                    org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean(),
+                    org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("0xtx");
 
             ProjectVoteRequest request = new ProjectVoteRequest();
             request.setSupport(true);
+            request.setTxHash("0xtx");
 
             mockMvc.perform(post("/api/projects/1/vote")
                     .with(csrf())

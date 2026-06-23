@@ -1,2 +1,0 @@
-ALTER TABLE users ADD COLUMN nivel_inversor VARCHAR(50) DEFAULT 'STARTER';
-ALTER TABLE users ADD COLUMN puntos_experiencia INTEGER DEFAULT 0;
