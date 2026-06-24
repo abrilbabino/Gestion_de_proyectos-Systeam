@@ -24,11 +24,12 @@ public class EventosRepository {
     }
 
     public Long insert(String titulo, String descripcion, java.time.LocalDateTime fechaEvento,
-                       java.math.BigDecimal rewardAmount, Long proyectoId, Long createdBy) {
+                       java.math.BigDecimal rewardAmount, Long proyectoId, Long createdBy,
+                       String cronograma) {
         jdbc.update(
-                "INSERT INTO eventos (titulo, descripcion, fecha_evento, reward_amount, proyecto_id, created_by) " +
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                titulo, descripcion, Timestamp.valueOf(fechaEvento), rewardAmount, proyectoId, createdBy);
+                "INSERT INTO eventos (titulo, descripcion, fecha_evento, reward_amount, proyecto_id, created_by, cronograma) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                titulo, descripcion, Timestamp.valueOf(fechaEvento), rewardAmount, proyectoId, createdBy, cronograma);
         return jdbc.queryForObject("SELECT LASTVAL()", Long.class);
     }
 
@@ -45,11 +46,11 @@ public class EventosRepository {
 
     public void update(Long id, String titulo, String descripcion,
                        java.time.LocalDateTime fechaEvento, java.math.BigDecimal rewardAmount,
-                       Long proyectoId) {
+                       Long proyectoId, String cronograma) {
         jdbc.update(
                 "UPDATE eventos SET titulo = ?, descripcion = ?, fecha_evento = ?, " +
-                "reward_amount = ?, proyecto_id = ? WHERE id = ?",
-                titulo, descripcion, Timestamp.valueOf(fechaEvento), rewardAmount, proyectoId, id);
+                "reward_amount = ?, proyecto_id = ?, cronograma = ? WHERE id = ?",
+                titulo, descripcion, Timestamp.valueOf(fechaEvento), rewardAmount, proyectoId, cronograma, id);
     }
 
     public void deleteById(Long id) {
@@ -93,6 +94,7 @@ public class EventosRepository {
             r.setProyectoId((Long) rs.getObject("proyecto_id"));
             r.setCreatedBy((Long) rs.getObject("created_by"));
             r.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+            r.setCronograma(rs.getString("cronograma"));
             return r;
         }
     }

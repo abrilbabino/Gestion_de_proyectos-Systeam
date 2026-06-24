@@ -1,7 +1,10 @@
 package com.systeam.governance.controller;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,13 +113,25 @@ public class GovernanceController {
     }
 
     /**
-     * Returns the current vote economics configuration (cost, reward, treasury).
-     * The frontend uses this to display how much a vote costs and rewards.
+     * Returns the current vote economics configuration (cost, reward, treasury)
+     * plus investor discount info for the authenticated user.
      */
     @GetMapping("/config")
     @PreAuthorize("hasAuthority('governance:read')")
-    public VoteEconomicsConfig getConfig() {
-        return voteEconomicsConfigService.loadConfig();
+    public Map<String, Object> getConfig(@AuthenticationPrincipal JwtPrincipal user) {
+        VoteEconomicsConfig config = voteEconomicsConfigService.loadConfig();
+        int investmentCount = offChainService.countUserInvestments(user.userId());
+        BigDecimal userVoteCost = offChainService.calculateEffectiveVoteCost(user.userId());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("voteCost", config.getVoteCost());
+        response.put("voteReward", config.getVoteReward());
+        response.put("treasuryUserId", config.getTreasuryUserId());
+        response.put("investorDiscount", config.getInvestorDiscount());
+        response.put("minVoteCost", config.getMinVoteCost());
+        response.put("userVoteCost", userVoteCost);
+        response.put("investmentCount", investmentCount);
+        return response;
     }
 
     @PostMapping("/proposals/{id}/execute")

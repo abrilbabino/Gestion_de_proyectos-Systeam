@@ -51,14 +51,14 @@ class EventosServiceTest {
     void createEvento_persistsAndReturnsResponse() {
         EventoRequest request = buildRequest();
         EventoResponse expected = buildResponse(1L);
-        when(eventosRepository.insert(any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(eventosRepository.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(1L);
         when(eventosRepository.findById(1L)).thenReturn(expected);
 
         EventoResponse result = service.createEvento(request, 99L);
 
         assertThat(result.getId()).isEqualTo(1L);
         verify(eventosRepository).insert(
-                eq("Demo Event"), eq("A demo"), any(), eq(new BigDecimal("20")), eq(5L), eq(99L));
+                eq("Demo Event"), eq("A demo"), any(), eq(new BigDecimal("20")), eq(5L), eq(99L), any());
     }
 
     // ---- getEvento ----

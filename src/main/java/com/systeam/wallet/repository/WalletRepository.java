@@ -109,12 +109,23 @@ public class WalletRepository {
                    ('Recompensa de voto — ' || (SELECT titulo FROM projects WHERE id = rl.ref_id)) AS descripcion,
                    rl.created_at AS fecha
             FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'VOTE_REWARD'
+
+            UNION ALL
+
+            SELECT 'EVENTO_RECOMPENSA' AS tipo,
+                   rl.amount AS monto,
+                   NULL AS cantidad,
+                   rl.tx_hash,
+                   ('Recompensa de evento — ' || COALESCE((SELECT titulo FROM eventos WHERE id = rl.ref_id), 'Evento #' || rl.ref_id)) AS descripcion,
+                   rl.created_at AS fecha
+            FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'EVENT_ATTENDANCE'
+
         ) historial
         WHERE 1=1
         """;
 
         List<Object> params = new ArrayList<>(List.of(
-            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
+            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
         ));
 
         if (desde != null) {

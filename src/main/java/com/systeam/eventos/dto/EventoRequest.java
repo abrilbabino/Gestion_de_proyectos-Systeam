@@ -21,6 +21,8 @@ public class EventoRequest {
 
     private Long proyectoId;
 
+    private String cronograma;
+
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }
     public String getDescripcion() { return descripcion; }
@@ -31,4 +33,6 @@ public class EventoRequest {
     public void setRewardAmount(BigDecimal rewardAmount) { this.rewardAmount = rewardAmount; }
     public Long getProyectoId() { return proyectoId; }
     public void setProyectoId(Long proyectoId) { this.proyectoId = proyectoId; }
+    public String getCronograma() { return cronograma; }
+    public void setCronograma(String cronograma) { this.cronograma = cronograma; }
 }

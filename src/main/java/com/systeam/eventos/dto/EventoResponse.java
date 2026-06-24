@@ -13,6 +13,7 @@ public class EventoResponse {
     private Long proyectoId;
     private Long createdBy;
     private LocalDateTime createdAt;
+    private String cronograma;
 
     public EventoResponse() {}
 
@@ -32,4 +33,6 @@ public class EventoResponse {
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getCronograma() { return cronograma; }
+    public void setCronograma(String cronograma) { this.cronograma = cronograma; }
 }

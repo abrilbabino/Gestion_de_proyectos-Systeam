@@ -42,7 +42,8 @@ public class EventosService {
                 request.getFechaEvento(),
                 request.getRewardAmount(),
                 request.getProyectoId(),
-                createdBy);
+                createdBy,
+                request.getCronograma());
         log.info("Evento created: id={} titulo={} by userId={}", id, request.getTitulo(), createdBy);
         return eventosRepository.findById(id);
     }
@@ -70,7 +71,8 @@ public class EventosService {
                 request.getDescripcion(),
                 request.getFechaEvento(),
                 request.getRewardAmount(),
-                request.getProyectoId());
+                request.getProyectoId(),
+                request.getCronograma());
         log.info("Evento updated: id={}", id);
         return eventosRepository.findById(id);
     }

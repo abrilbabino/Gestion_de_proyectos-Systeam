@@ -118,29 +118,57 @@ public class GovernanceService {
     }
 
     public void validateVoteCost(Long userId) {
-        VoteEconomicsConfig config = configService.loadConfig();
-        BigDecimal cost = config.getVoteCost();
+        BigDecimal cost = calculateEffectiveVoteCost(userId);
         if (cost.signum() > 0) {
             walletService.checkSufficientBalance(userId, cost);
         }
     }
 
     /**
+     * Returns the number of distinct projects a user has invested in.
+     */
+    public int countUserInvestments(Long userId) {
+        Integer count = jdbc.queryForObject(
+            "SELECT COUNT(DISTINCT proyecto_id) FROM investments WHERE usuario_id = ? AND estado = 'CONFIRMADA'",
+            Integer.class, userId
+        );
+        return count != null ? count : 0;
+    }
+
+    /**
+     * Calculates effective vote cost for a user, applying investor discount.
+     * effectiveCost = max(baseCost - (investmentCount * discountPerInvestment), minVoteCost)
+     */
+    public BigDecimal calculateEffectiveVoteCost(Long userId) {
+        VoteEconomicsConfig config = configService.loadConfig();
+        BigDecimal baseCost = config.getVoteCost();
+        BigDecimal discountPerInvestment = config.getInvestorDiscount();
+        BigDecimal minCost = config.getMinVoteCost();
+
+        int investmentCount = countUserInvestments(userId);
+        BigDecimal totalDiscount = discountPerInvestment.multiply(BigDecimal.valueOf(investmentCount));
+        BigDecimal effectiveCost = baseCost.subtract(totalDiscount);
+
+        return effectiveCost.compareTo(minCost) > 0 ? effectiveCost : minCost;
+    }
+
+    /**
      * Records the economic side-effects of a successful on-chain vote.
      * Called AFTER the on-chain vote is confirmed. Within a single transaction:
-     * 1. Deducts vote cost from voter (if cost > 0)
-     * 2. Credits vote cost to treasury
-     * 3. Accrues vote reward to voter (idempotent)
-     * 4. Publishes VoteRewardedEvent for listeners
-     * 5. Broadcasts updated tallies via SSE
+     * 1. Calculates effective vote cost (with investor discount)
+     * 2. Deducts effective cost from voter (if cost > 0)
+     * 3. Credits effective cost to treasury
+     * 4. Accrues vote reward to voter (idempotent)
+     * 5. Publishes VoteRewardedEvent for listeners
+     * 6. Broadcasts updated tallies via SSE
      */
     @Transactional
     public void recordVoteEconomics(Long userId, Long proposalId, String txHash) {
         VoteEconomicsConfig config = configService.loadConfig();
-        BigDecimal cost = config.getVoteCost();
+        BigDecimal cost = calculateEffectiveVoteCost(userId);
         BigDecimal reward = config.getVoteReward();
 
-        // 1. Deduct vote cost from voter and credit to treasury
+        // 1. Deduct effective vote cost from voter and credit to treasury
         if (cost.signum() > 0) {
             walletService.adjustBalance(userId, cost.negate());
             if (config.getTreasuryUserId() != null) {
