@@ -196,9 +196,47 @@ class DividendServiceTest {
     class ReclamarDividendos {
 
         @Test
+        void cuandoTxInvalida_lanzaConflict() throws Exception {
+            when(blockchainService.verifyTransaction("0xbadtx")).thenReturn(false);
+
+            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xbadtx", null))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("on-chain fallo");
+        }
+
+        @Test
+        void cuandoTxYaRegistrada_lanzaConflict() throws Exception {
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(1);
+
+            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("ya fue registrado");
+        }
+
+        @Test
+        void cuandoYaReclamoEstaDivision_lanzaConflict() throws Exception {
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(0);
+            when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
+                .thenReturn(List.of(Map.of("subtokenId", 5L, "cantidad", 10, "nombre", "TokenX")));
+            when(jdbc.queryForObject(contains("FROM dividendos"), eq(Long.class), eq(PROYECTO_ID)))
+                .thenReturn(42L);
+            when(jdbc.queryForObject(contains("dividendo_id"), eq(Integer.class), eq(42L), eq(USUARIO_ID)))
+                .thenReturn(1);
+
+            assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Ya reclamaste");
+        }
+
+        @Test
         void cuandoNoTieneActivos_lanzaConflict() throws Exception {
-            when(dividendDistributorService.getClaimable(
-                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.ZERO);
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(0);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of());
 
@@ -209,12 +247,13 @@ class DividendServiceTest {
 
         @Test
         void cuandoNoHayDividendos_lanzaConflict() throws Exception {
-            when(dividendDistributorService.getClaimable(
-                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.ZERO);
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(0);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of(Map.of("subtokenId", 5L, "cantidad", 10, "nombre", "TokenX")));
-            when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
-                .thenReturn(BigDecimal.ZERO);
+            when(jdbc.queryForObject(contains("FROM dividendos"), eq(Long.class), eq(PROYECTO_ID)))
+                .thenReturn(null);
 
             assertThatThrownBy(() -> service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null))
                 .isInstanceOf(ConflictException.class)
@@ -223,40 +262,47 @@ class DividendServiceTest {
 
         @Test
         void reclamacionExitosa() throws Exception {
-            when(dividendDistributorService.getClaimable(
-                BigInteger.valueOf(PROYECTO_ID), WALLET)).thenReturn(BigInteger.valueOf(500));
-            when(dividendDistributorService.claim(BigInteger.valueOf(PROYECTO_ID))).thenReturn("0xclaimtx");
-            when(blockchainService.verifyTransaction("0xclaimtx")).thenReturn(true);
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(0);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of(Map.of("subtokenId", 5L, "cantidad", 10, "nombre", "TokenX")));
-            when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
+            when(jdbc.queryForObject(contains("FROM dividendos"), eq(Long.class), eq(PROYECTO_ID)))
+                .thenReturn(42L);
+            when(jdbc.queryForObject(contains("dividendo_id"), eq(Integer.class), eq(42L), eq(USUARIO_ID)))
+                .thenReturn(0);
+            when(jdbc.queryForObject(contains("monto_por_subtoken"), eq(BigDecimal.class),
+                eq(PROYECTO_ID), eq(USUARIO_ID), eq(5L)))
                 .thenReturn(new BigDecimal("50.0000"));
 
             service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", null);
 
             verify(jdbc).update(
                 argThat(sql -> sql != null && sql.toString().contains("INSERT INTO reclamos_dividendos")),
-                eq(PROYECTO_ID), eq(USUARIO_ID), eq(5L), eq(10), eq(new BigDecimal("500.00"))
-            );
-            verify(jdbc).update(
-                argThat(sql -> sql != null && sql.toString().contains("UPDATE users")),
-                eq(new BigDecimal("500.00")), eq(USUARIO_ID)
+                eq(42L), eq(USUARIO_ID), eq(5L), eq(10),
+                eq(new BigDecimal("500.0000")), eq("0xtx")
             );
             verify(eventPublisher).publishEvent(any(DividendDistributedEvent.class));
         }
 
         @Test
-        void reclamacionExitosa_sinWallet() {
+        void reclamacionExitosa_conAmountParam() throws Exception {
+            when(blockchainService.verifyTransaction("0xtx")).thenReturn(true);
+            when(jdbc.queryForObject(contains("tx_hash"), eq(Integer.class), eq("0xtx")))
+                .thenReturn(0);
             when(jdbc.query(anyString(), any(RowMapper.class), eq(USUARIO_ID), eq(PROYECTO_ID)))
                 .thenReturn(List.of(Map.of("subtokenId", 3L, "cantidad", 2, "nombre", "TokenY")));
-            when(jdbc.queryForObject(anyString(), eq(BigDecimal.class), eq(PROYECTO_ID)))
-                .thenReturn(new BigDecimal("25.0000"));
+            when(jdbc.queryForObject(contains("FROM dividendos"), eq(Long.class), eq(PROYECTO_ID)))
+                .thenReturn(42L);
+            when(jdbc.queryForObject(contains("dividendo_id"), eq(Integer.class), eq(42L), eq(USUARIO_ID)))
+                .thenReturn(0);
 
-            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, null, "0xtx", null);
+            service.reclamarDividendos(PROYECTO_ID, USUARIO_ID, WALLET, "0xtx", new BigDecimal("100"));
 
             verify(jdbc).update(
                 argThat(sql -> sql != null && sql.toString().contains("INSERT INTO reclamos_dividendos")),
-                eq(PROYECTO_ID), eq(USUARIO_ID), eq(3L), eq(2), eq(new BigDecimal("50.00"))
+                eq(42L), eq(USUARIO_ID), eq(3L), eq(2),
+                eq(new BigDecimal("100")), eq("0xtx")
             );
             verify(eventPublisher).publishEvent(any(DividendDistributedEvent.class));
         }

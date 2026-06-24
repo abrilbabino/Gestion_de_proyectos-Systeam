@@ -227,10 +227,16 @@ public class DividendService {
         if (!verifyBlockchainTx(txHash)) {
             throw new ConflictException("El reclamo de dividendos on-chain fallo o la txHash es invalida");
         }
+
+        Integer txExists = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM reclamos_dividendos WHERE tx_hash = ?",
+            Integer.class, txHash);
+        if (txExists != null && txExists > 0) {
+            throw new ConflictException("Este reclamo ya fue registrado (tx: " + txHash + ")");
+        }
+
         log.info("Dividendos reclamados verificados on-chain: proyecto={}, wallet={}, tx={}, amountParam={}",
             proyectoId, wallet, txHash, amountParam);
-
-        // 2. Acreditar via DB (registro historico solamente, el Smart Contract ya envio los tokens)
         List<Map<String, Object>> activos = jdbc.query(
             "SELECT pa.subtoken_id, pa.cantidad, s.nombre " +
             "FROM portfolio_activos pa " +
@@ -256,6 +262,13 @@ public class DividendService {
 
         if (ultimoDividendoId == null) {
             throw new ConflictException("No hay dividendos registrados para este proyecto");
+        }
+
+        Integer alreadyClaimed = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM reclamos_dividendos WHERE dividendo_id = ? AND usuario_id = ?",
+            Integer.class, ultimoDividendoId, usuarioId);
+        if (alreadyClaimed != null && alreadyClaimed > 0) {
+            throw new ConflictException("Ya reclamaste los dividendos de esta distribucion");
         }
 
         BigDecimal montoTotal = BigDecimal.ZERO;
