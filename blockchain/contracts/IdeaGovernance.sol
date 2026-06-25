@@ -33,10 +33,12 @@ contract IdeaGovernance is AccessControl {
     uint256 public proposalCounter;
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(address => uint256) public governanceMultiplier;
 
     event ProposalCreated(uint256 indexed id, address indexed proposer, string description, ProposalType proposalType);
     event Voted(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight);
     event ProposalExecuted(uint256 indexed id);
+    event GovernanceMultiplierChanged(address indexed voter, uint256 multiplier);
 
     constructor(address _idea) {
         require(_idea != address(0), "GV: invalid IDEA");
@@ -70,6 +72,12 @@ contract IdeaGovernance is AccessControl {
         emit ProposalCreated(proposalCounter, msg.sender, description, proposalType);
     }
 
+    function setGovernanceMultiplier(address voter, uint256 multiplier) external onlyRole(ADMIN_ROLE) {
+        require(voter != address(0), "GV: invalid voter");
+        governanceMultiplier[voter] = multiplier;
+        emit GovernanceMultiplierChanged(voter, multiplier);
+    }
+
     function vote(uint256 proposalId, bool support) external {
         Proposal storage prop = proposals[proposalId];
         require(prop.id != 0, "GV: proposal not found");
@@ -78,6 +86,10 @@ contract IdeaGovernance is AccessControl {
         require(!hasVoted[proposalId][msg.sender], "GV: already voted");
 
         uint256 weight = idea.balanceOf(msg.sender);
+        uint256 mult = governanceMultiplier[msg.sender];
+        if (mult > 1) {
+            weight = weight * mult;
+        }
         require(weight > 0, "GV: need IDEA to vote");
 
         hasVoted[proposalId][msg.sender] = true;

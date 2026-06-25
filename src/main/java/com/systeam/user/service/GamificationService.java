@@ -14,14 +14,18 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import com.systeam.notificaciones.event.InvestmentConfirmedEvent;
 import com.systeam.user.model.InvestorLevel;
 
+import com.systeam.investment.service.SmartContractService;
+
 @Service
 public class GamificationService {
 
     private static final Logger log = LoggerFactory.getLogger(GamificationService.class);
     private final JdbcTemplate jdbc;
+    private final SmartContractService smartContractService;
 
-    public GamificationService(JdbcTemplate jdbc) {
+    public GamificationService(JdbcTemplate jdbc, SmartContractService smartContractService) {
         this.jdbc = jdbc;
+        this.smartContractService = smartContractService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -41,7 +45,7 @@ public class GamificationService {
 
         // 2. Creadores distintos
         Integer creadoresDistintos = jdbc.queryForObject(
-            "SELECT COUNT(DISTINCT p.creator_id) FROM investments i " +
+            "SELECT COUNT(DISTINCT p.creador_id) FROM investments i " +
             "JOIN projects p ON i.proyecto_id = p.id " +
             "WHERE i.usuario_id = ? AND i.estado = 'CONFIRMADA'",
             Integer.class, usuarioId
@@ -58,12 +62,41 @@ public class GamificationService {
         // Determinar el nivel basandose en la matriz (Canva)
         InvestorLevel newLevel = InvestorLevel.STARTER; // Default
 
-        if (proyectosFondeados >= 15 && creadoresDistintos >= 10 && montoTotalInvertido.compareTo(new BigDecimal("50000")) >= 0) {
+        if (proyectosFondeados >= 15 && creadoresDistintos >= 10 && montoTotalInvertido.compareTo(new BigDecimal("12000")) >= 0) {
             newLevel = InvestorLevel.VISIONARY;
-        } else if (proyectosFondeados >= 7 && creadoresDistintos >= 5 && montoTotalInvertido.compareTo(new BigDecimal("10000")) >= 0) {
+        } else if (proyectosFondeados >= 7 && creadoresDistintos >= 5 && montoTotalInvertido.compareTo(new BigDecimal("5000")) >= 0) {
             newLevel = InvestorLevel.PARTNER;
-        } else if (proyectosFondeados >= 3 && creadoresDistintos >= 2 && montoTotalInvertido.compareTo(new BigDecimal("2000")) >= 0) {
+        } else if (proyectosFondeados >= 3 && creadoresDistintos >= 2 && montoTotalInvertido.compareTo(new BigDecimal("1000")) >= 0) {
             newLevel = InvestorLevel.INVESTOR;
+        }
+
+        // Bridge SetBonus: Diversificador IDEAFY
+        if (creadoresDistintos >= 5) {
+            // El set bonus Diversificador garantiza al menos nivel PARTNER
+            if (newLevel == InvestorLevel.STARTER || newLevel == InvestorLevel.INVESTOR) {
+                newLevel = InvestorLevel.PARTNER;
+            }
+
+            try {
+                Boolean isDiversificador = jdbc.queryForObject(
+                    "SELECT is_diversificador FROM users WHERE id = ?", Boolean.class, usuarioId
+                );
+                if (isDiversificador == null || !isDiversificador) {
+                    // Update BD
+                    jdbc.update("UPDATE users SET is_diversificador = true WHERE id = ?", usuarioId);
+                    
+                    // Enviar transaccion on-chain (Governance x2)
+                    String wallet = jdbc.queryForObject(
+                        "SELECT wallet_address FROM wallets WHERE user_id = ?", String.class, usuarioId
+                    );
+                    if (wallet != null && !wallet.isBlank()) {
+                        smartContractService.setGovernanceMultiplierOnChain(wallet, 2);
+                        log.info("Set Governance Multiplier x2 On-Chain para usuario {} wallet {}", usuarioId, wallet);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error en el puente Diversificador on-chain para usuario {}: {}", usuarioId, e.getMessage());
+            }
         }
 
         // Actualizar en BD

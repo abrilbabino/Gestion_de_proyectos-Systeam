@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "./IdeafyFactory.sol";
 import "./SubToken.sol";
+import "./SetBonusNFT.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -13,6 +14,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
 
     IERC20 public immutable idea;
     IdeafyFactory public immutable factory;
+    SetBonusNFT public setBonusNFT;
 
     address public treasury;
     uint256 public constant ISSUANCE_FEE_BPS = 500;
@@ -58,6 +60,11 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(_treasury != address(0), "Offering: invalid treasury");
         treasury = _treasury;
         emit TreasurySet(_treasury);
+    }
+
+    function setBonusNFTContract(address _nft) external onlyRole(ADMIN_ROLE) {
+        require(_nft != address(0), "Offering: invalid NFT");
+        setBonusNFT = SetBonusNFT(_nft);
     }
 
     function registerOffering(
@@ -155,6 +162,11 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         off.totalInvested = newTotal;
 
         emit InvestmentMade(proyectoId, msg.sender, ideaAmount, tokenAmount, effectivePrice);
+
+        if (address(setBonusNFT) != address(0)) {
+            bytes32 entropy = keccak256(abi.encodePacked(msg.sender, ideaAmount, block.timestamp, proyectoId));
+            setBonusNFT.mintRandom(msg.sender, entropy);
+        }
     }
 
     function finalize(uint256 proyectoId) external onlyRole(ADMIN_ROLE) {

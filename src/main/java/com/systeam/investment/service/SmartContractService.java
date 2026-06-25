@@ -141,6 +141,17 @@ public class SmartContractService {
         }
     }
 
+    public boolean setGovernanceMultiplierOnChain(String walletAddress, int multiplier) {
+        try {
+            String txHash = blockchain.setGovernanceMultiplier(walletAddress, multiplier);
+            log.info("setGovernanceMultiplier txHash: {}", txHash);
+            return true;
+        } catch (Exception e) {
+            log.error("Error setting governance multiplier for {}: {}", walletAddress, e.getMessage());
+            return false;
+        }
+    }
+
     public Map<String, Object> refundInvestment(Long proyectoId, Long usuarioId, BigDecimal montoIdea) {
         Map<String, Object> result = new HashMap<>();
         try {

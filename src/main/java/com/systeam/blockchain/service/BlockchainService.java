@@ -113,6 +113,15 @@ public class BlockchainService {
         return executeWrite(props.getIdeaTokenAddress(), fn);
     }
 
+    public String setGovernanceMultiplier(String voterAddress, int multiplier) throws Exception {
+        Function fn = new Function(
+            "setGovernanceMultiplier",
+            List.of(new Address(voterAddress), new org.web3j.abi.datatypes.generated.Uint256(multiplier)),
+            List.of()
+        );
+        return executeWrite(props.getIdeaGovernanceAddress(), fn);
+    }
+
     public String payUSDC(BigInteger amountInUSDC, String actionId) throws Exception {
         byte[] padded = new byte[32];
         byte[] raw = actionId.getBytes();

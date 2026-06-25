@@ -296,7 +296,7 @@ public class InvestmentService {
         inv.setSubTokensRecibidos(subTokens);
         inv.setTxHash(txHash);
         inv.setEstado("CONFIRMADA");
-        inv.setDescuentoPorcentaje(descuentoPorcentaje.intValue());
+        inv.setDescuentoPorcentaje(descuentoPorcentaje);
 
         Inversion savedInv = investmentRepository.save(inv);
 
@@ -484,7 +484,7 @@ public class InvestmentService {
                 .precioSubtoken(precioSubtoken)
                 .txHash(inv.getTxHash())
                 .estado(inv.getEstado())
-                .descuentoPorcentaje(inv.getDescuentoPorcentaje() != null ? BigDecimal.valueOf(inv.getDescuentoPorcentaje()) : null)
+                .descuentoPorcentaje(inv.getDescuentoPorcentaje())
                 .createdAt(inv.getCreatedAt())
                 .updatedAt(inv.getUpdatedAt())
                 .build();
@@ -496,15 +496,22 @@ public class InvestmentService {
                 "SELECT creador_id FROM projects WHERE id = ?", Long.class, proyectoId
             );
             
-            Integer pastInvestments = jdbc.queryForObject(
-                "SELECT COUNT(i.id) FROM investments i " +
+            // Contamos en cuántos proyectos DISTINTOS de este creador invirtió antes
+            Integer proyectosPrevios = jdbc.queryForObject(
+                "SELECT COUNT(DISTINCT p.id) FROM investments i " +
                 "JOIN projects p ON i.proyecto_id = p.id " +
-                "WHERE i.usuario_id = ? AND p.creador_id = ?",
+                "WHERE i.usuario_id = ? AND p.creador_id = ? AND i.estado = 'CONFIRMADA'",
                 Integer.class, usuarioId, creadorId
             );
+            if (proyectosPrevios == null) proyectosPrevios = 0;
             
-            if (pastInvestments != null && pastInvestments > 0) {
-                // Gamification Cross-Reward Boost
+            // Regla: La inversion que desbloquea el logro ya recibe el beneficio
+            int totalProyectos = proyectosPrevios + 1;
+            
+            if (totalProyectos >= 2) {
+                BigDecimal baseDiscount = new BigDecimal("5.0");
+                
+                // 1. Multiplicador por Nivel de Inversor
                 String nivelInversor = null;
                 try {
                     nivelInversor = jdbc.queryForObject(
@@ -512,19 +519,30 @@ public class InvestmentService {
                     );
                 } catch (Exception ignored) { }
                 
-                BigDecimal baseDiscount = new BigDecimal("5.0");
-                BigDecimal multiplier = BigDecimal.ONE;
-                
+                BigDecimal multiplierLevel = BigDecimal.ONE;
                 if (nivelInversor != null) {
                     switch(nivelInversor.toUpperCase()) {
-                        case "INVESTOR": multiplier = new BigDecimal("1.5"); break; // 7.5%
-                        case "PARTNER": multiplier = new BigDecimal("2.0"); break;  // 10.0%
-                        case "VISIONARY": multiplier = new BigDecimal("3.0"); break; // 15.0%
-                        default: multiplier = BigDecimal.ONE; break; // STARTER: 5.0%
+                        case "INVESTOR": multiplierLevel = new BigDecimal("1.5"); break; // 7.5%
+                        case "PARTNER": multiplierLevel = new BigDecimal("2.0"); break;  // 10.0%
+                        case "VISIONARY": multiplierLevel = new BigDecimal("3.0"); break; // 15.0%
+                        default: multiplierLevel = BigDecimal.ONE; break; // STARTER: 5.0%
                     }
                 }
                 
-                return baseDiscount.multiply(multiplier);
+                // 2. Multiplicador por Set Bonus NFT
+                BigDecimal multiplierSetBonus = BigDecimal.ONE;
+                if (totalProyectos >= 5) {
+                    multiplierSetBonus = new BigDecimal("1.75"); // Arquitecto IDEAFY
+                } else if (totalProyectos >= 3) {
+                    multiplierSetBonus = new BigDecimal("1.5");  // Trilogía IDEAFY
+                } else if (totalProyectos >= 2) {
+                    multiplierSetBonus = new BigDecimal("1.25"); // Duo IDEAFY
+                }
+                
+                // 3. Regla Opción B (El Mayor Gana)
+                BigDecimal finalMultiplier = multiplierLevel.max(multiplierSetBonus);
+                
+                return baseDiscount.multiply(finalMultiplier);
             }
         } catch (Exception e) {
             log.warn("Error calculando descuento cross-reward: {}", e.getMessage());
