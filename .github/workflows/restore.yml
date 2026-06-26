@@ -29,8 +29,7 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get install -y postgresql-client
 
-      - name: Reset public schema contents (Preserving Supabase Roles)
-        # Usamos PGPASSWORD para que psql no se quede colgado esperando la contraseña
+      - name: Reset public schema contents
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
         run: |
@@ -38,22 +37,18 @@ jobs:
           DO $$ DECLARE
               r RECORD;
           BEGIN
-              -- 1. Eliminar Vistas
               FOR r IN (SELECT table_name FROM information_schema.views WHERE table_schema = 'public') LOOP
                   EXECUTE 'DROP VIEW IF EXISTS public.' || quote_ident(r.table_name) || ' CASCADE';
               END LOOP;
 
-              -- 2. Eliminar Tablas (El CASCADE arrastra índices, secuencias asociadas y llaves foráneas)
               FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
                   EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
               END LOOP;
 
-              -- 3. Eliminar Tipos Personalizados (Enums)
               FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e') LOOP
                   EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
               END LOOP;
 
-              -- 4. Eliminar Funciones y Triggers Custom (Identificación exacta por firma de argumentos)
               FOR r IN (
                   SELECT p.oid::regprocedure AS func_signature
                   FROM pg_proc p
@@ -69,7 +64,6 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
         run: |
-          # El truco de 'replica' asegura compatibilidad total con tus archivos viejos (con cat) y los nuevos (con pg_dump)
-          (echo "SET session_replication_role = 'replica';"; cat backup.sql) | psql -d "$PGPASSWORD" \
-            --single-transaction \
-            -v ON_ERROR_STOP=1
+          # Usamos el modo replica para que la restauración ignore restricciones 
+          # y sea compatible con cualquier formato de backup (viejo o nuevo)
+          (echo "SET session_replication_role = 'replica';"; cat backup.sql) | psql -d "$PGPASSWORD" --single-transaction -v ON_ERROR_STOP=1

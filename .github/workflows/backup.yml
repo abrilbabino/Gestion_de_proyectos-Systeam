@@ -20,11 +20,11 @@ jobs:
         run: sudo apt-get install -y postgresql-client
 
       - name: Run Backup
-        # Mapeamos el secreto a PGPASSWORD para evitar prompts interactivos y cuelgues
+        # Esta variable PGPASSWORD le da al comando el "pase VIP" de autenticación
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          pg_dump -d "$PGPASSWORD" -n public -f backup.sql
+          pg_dump --verbose --no-owner --no-privileges "${{ secrets.SUPABASE_DB_URL }}" -f backup.sql
       
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
