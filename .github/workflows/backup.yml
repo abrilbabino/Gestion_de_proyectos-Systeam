@@ -18,6 +18,8 @@ jobs:
 
       - name: Install PostgreSQL client
         run: |
+          sudo apt-get remove -y postgresql-client postgresql-client-common
+          sudo apt-get autoremove -y
           sudo apt-get update
           sudo apt-get install -y gnupg2 wget lsb-release
           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
