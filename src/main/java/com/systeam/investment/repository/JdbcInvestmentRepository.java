@@ -52,7 +52,7 @@ public class JdbcInvestmentRepository implements InvestmentRepository {
         // Manejar descuento_porcentaje que puede ser null
         Object desc = rs.getObject("descuento_porcentaje");
         if (desc != null) {
-            inv.setDescuentoPorcentaje(new java.math.BigDecimal(desc.toString()).intValue());
+            inv.setDescuentoPorcentaje(new java.math.BigDecimal(desc.toString()));
         }
 
         return inv;
