@@ -32,7 +32,7 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          pg_dump --verbose --no-owner --no-privileges -n public "${{ secrets.SUPABASE_DB_URL }}" -f backup.sql
+          /usr/lib/postgresql/17/bin/pg_dump --verbose --no-owner --no-privileges -n public "${{ secrets.SUPABASE_DB_URL }}" -f backup.sql
       
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
