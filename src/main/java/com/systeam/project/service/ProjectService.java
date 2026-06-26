@@ -26,6 +26,7 @@ import com.systeam.project.repository.ProjectRepository;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.TokenizationService;
+import com.systeam.blockchain.service.BlockchainService;
 
 @Service
 public class ProjectService {
@@ -37,17 +38,20 @@ public class ProjectService {
     private final JdbcTemplate jdbc;
     private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
+    private final BlockchainService blockchainService;
 
     public ProjectService(ProjectRepository projectRepository,
                           TokenizationService tokenizationService,
                           JdbcTemplate jdbc,
                           ApplicationEventPublisher eventPublisher,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          BlockchainService blockchainService) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
         this.jdbc = jdbc;
         this.eventPublisher = eventPublisher;
         this.userRepository = userRepository;
+        this.blockchainService = blockchainService;
     }
 
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
@@ -128,6 +132,45 @@ public class ProjectService {
         }
 
         throw new ConflictException("Estado de proyecto desconocido");
+    }
+
+    @Transactional
+    public void publishProject(Long id, String signature, String walletAddress, Long userId) {
+        Proyecto proyecto = findProjectOrThrow(id);
+        if (!proyecto.getCreador().getId().equals(userId)) {
+            throw new ConflictException("Solo el creador puede publicar el proyecto");
+        }
+        if (!"PREPARACION".equals(proyecto.getEstado())) {
+            throw new ConflictException("El proyecto no está en estado PREPARACION");
+        }
+
+        String message = "Publicar proyecto: " + proyecto.getTitulo();
+        boolean valid = blockchainService.verifySignature(message, signature, walletAddress);
+        if (!valid) {
+            throw new ConflictException("La firma digital es inválida o no corresponde a la wallet.");
+        }
+
+        proyecto.setCreatorSignature(signature);
+        proyecto.setEstado("EN_AUDITORIA");
+        projectRepository.save(proyecto);
+
+        eventPublisher.publishEvent(new ProjectStateChangedEvent(proyecto.getId(), "PREPARACION", "EN_AUDITORIA", proyecto.getCreador().getId()));
+    }
+
+    @Transactional
+    public String releaseEscrowFunds(Long id, BigDecimal amount, String escrowAddress) {
+        Proyecto proyecto = findProjectOrThrow(id);
+        if (!List.of("EJECUCION", "FINALIZADO").contains(proyecto.getEstado())) {
+            throw new ConflictException("El proyecto no está en fase de ejecución para liberar fondos.");
+        }
+        
+        try {
+            java.math.BigInteger amountWei = amount.multiply(BigDecimal.valueOf(1e18)).toBigInteger();
+            return blockchainService.releaseEscrowFunds(escrowAddress, amountWei);
+        } catch (Exception e) {
+            log.error("Error al liberar fondos del escrow", e);
+            throw new ConflictException("Fallo en la blockchain al liberar los fondos del escrow: " + e.getMessage());
+        }
     }
 
     public ProjectResponse getProjectById(Long id) {

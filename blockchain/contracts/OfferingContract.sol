@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "./IdeafyFactory.sol";
 import "./SubToken.sol";
 import "./SetBonusNFT.sol";
+import "./ProjectEscrow.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -17,6 +18,7 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     SetBonusNFT public setBonusNFT;
 
     address public treasury;
+    address public auditOracle;
     uint256 public constant ISSUANCE_FEE_BPS = 500;
     uint256 public constant MAX_INVESTORS = 500;
     uint256 public constant GRACE_PERIOD = 30 days;
@@ -39,12 +41,16 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) public tokenOwed;
     mapping(uint256 => address[]) public investors;
 
+    mapping(uint256 => address) public escrows;
+
     event OfferingRegistered(uint256 indexed proyectoId, uint256 softCap, uint256 hardCap, uint256 basePrice);
     event InvestmentMade(uint256 indexed proyectoId, address indexed investor, uint256 ideaAmount, uint256 tokenAmount, uint256 price);
     event OfferingFinalized(uint256 indexed proyectoId, bool success);
     event TokensClaimed(uint256 indexed proyectoId, address indexed investor, uint256 amount);
     event RefundMade(uint256 indexed proyectoId, address indexed investor, uint256 amount);
     event TreasurySet(address indexed treasury);
+    event AuditOracleSet(address indexed oracle);
+    event EscrowCreated(uint256 indexed proyectoId, address escrowAddress);
 
     constructor(address _idea, address _factory) {
         require(_idea != address(0), "Offering: invalid IDEA");
@@ -60,6 +66,12 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         require(_treasury != address(0), "Offering: invalid treasury");
         treasury = _treasury;
         emit TreasurySet(_treasury);
+    }
+
+    function setAuditOracle(address _oracle) external onlyRole(ADMIN_ROLE) {
+        require(_oracle != address(0), "Offering: invalid oracle");
+        auditOracle = _oracle;
+        emit AuditOracleSet(_oracle);
     }
 
     function setBonusNFTContract(address _nft) external onlyRole(ADMIN_ROLE) {
@@ -190,10 +202,16 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         if (off.totalInvested >= off.softCap) {
             off.success = true;
             require(treasury != address(0), "Offering: treasury not set");
+            require(auditOracle != address(0), "Offering: oracle not set");
             uint256 fee = (off.totalInvested * ISSUANCE_FEE_BPS) / 10000;
             uint256 netAmount = off.totalInvested - fee;
-            require(idea.transfer(off.creator, netAmount),
-                "Offering: creator transfer failed");
+            
+            ProjectEscrow escrow = new ProjectEscrow(address(idea), auditOracle, off.creator, proyectoId);
+            escrows[proyectoId] = address(escrow);
+            emit EscrowCreated(proyectoId, address(escrow));
+
+            require(idea.transfer(address(escrow), netAmount),
+                "Offering: escrow transfer failed");
             if (fee > 0) {
                 require(idea.transfer(treasury, fee),
                     "Offering: fee transfer failed");

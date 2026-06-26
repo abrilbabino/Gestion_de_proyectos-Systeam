@@ -24,6 +24,10 @@ import org.web3j.crypto.Credentials;
 import org.web3j.tx.RawTransactionManager;
 import org.web3j.tx.TransactionManager;
 import org.web3j.utils.Convert;
+import org.web3j.utils.Numeric;
+import org.web3j.crypto.Sign;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Hash;
 
 import com.systeam.config.BlockchainProperties;
 
@@ -151,6 +155,37 @@ public class BlockchainService {
             return ethTx.getTransaction().get().getFrom();
         }
         return null;
+    }
+
+    public boolean verifySignature(String message, String signature, String expectedSigner) {
+        try {
+            byte[] msgHash = Hash.sha3(message.getBytes());
+            byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
+            byte v = signatureBytes[64];
+            if (v < 27) v += 27;
+            byte[] r = new byte[32];
+            byte[] s = new byte[32];
+            System.arraycopy(signatureBytes, 0, r, 0, 32);
+            System.arraycopy(signatureBytes, 32, s, 0, 32);
+            Sign.SignatureData sd = new Sign.SignatureData(v, r, s);
+            
+            String recoveredKey = Sign.signedPrefixedMessageToKey(message.getBytes(), sd).toString(16);
+            String recoveredAddress = "0x" + Keys.getAddress(recoveredKey);
+            
+            return recoveredAddress.equalsIgnoreCase(expectedSigner);
+        } catch (Exception e) {
+            log.error("Firma inválida: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public String releaseEscrowFunds(String escrowAddress, BigInteger amountWei) throws Exception {
+        Function fn = new Function(
+            "releaseFunds",
+            List.of(new Uint256(amountWei)),
+            List.of()
+        );
+        return executeWrite(escrowAddress, fn);
     }
 
     public String getBackendAddress() {

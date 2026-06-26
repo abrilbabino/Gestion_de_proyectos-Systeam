@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.systeam.project.dto.BoostProjectRequest;
 import com.systeam.project.dto.CreateProjectRequest;
+import com.systeam.project.dto.PublishProjectRequest;
+import com.systeam.project.dto.EscrowReleaseRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.ProjectVoteRequest;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -67,6 +69,24 @@ public class ProjectController {
     @PreAuthorize("hasAuthority('project:update')")
     public ProjectResponse updateProject(@PathVariable Long id, @RequestBody @Valid UpdateProjectRequest request) {
         return projectService.updateProject(id, request);
+    }
+
+    @PatchMapping("/{id}/publish")
+    @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasAuthority('project:update')")
+    public void publishProject(
+            @PathVariable Long id,
+            @RequestBody @Valid PublishProjectRequest request,
+            @AuthenticationPrincipal JwtPrincipal principal) {
+        projectService.publishProject(id, request.getSignature(), request.getWalletAddress(), principal.userId());
+    }
+
+    @PostMapping("/{id}/release-escrow")
+    @PreAuthorize("hasAuthority('project:update')") // O un permiso especifico como 'auditor:release'
+    public String releaseEscrow(
+            @PathVariable Long id,
+            @RequestBody @Valid EscrowReleaseRequest request) {
+        return projectService.releaseEscrowFunds(id, request.getAmountToRelease(), request.getEscrowAddress());
     }
 
     // CREATOR, INVESTOR y ADMIN tienen project:read
