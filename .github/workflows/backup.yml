@@ -2,29 +2,30 @@ name: Backup Database
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Se ejecuta todos los días a las 3:00 AM
-  workflow_dispatch: # Permite dispararlo manualmente desde la web de GitHub
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Necesario para la federación de identidades
+      id-token: 'write'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Supabase CLI
-        run: npm install -g supabase
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
 
       - name: Run Backup
+        # Mapeamos el secreto a PGPASSWORD para evitar prompts interactivos y cuelgues
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" -f schema.sql
-          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" --data-only --use-copy -f data.sql
-          cat schema.sql data.sql > backup.sql
-
+          pg_dump -d "$PGPASSWORD" -n public -f backup.sql
+      
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
         with:
