@@ -74,10 +74,17 @@ public class WalletRepository {
 
             UNION ALL
 
-            SELECT 'VENTA' AS tipo, ((precio_unitario / 1e18) * (cantidad_inicial - cantidad)) AS monto,
-                   (cantidad_inicial - cantidad) AS cantidad,
-                   tx_hash, 'Venta de tokens' AS descripcion, updated_at AS fecha
-            FROM order_book WHERE seller_id = ? AND cantidad < cantidad_inicial
+            SELECT 'VENTA' AS tipo, ((precio_unitario / 1e18) * cantidad) AS monto,
+                   cantidad,
+                   tx_hash, 'Venta en marketplace' AS descripcion, created_at AS fecha
+            FROM marketplace_trades WHERE seller_id = ?
+
+            UNION ALL
+
+            SELECT 'COMPRA' AS tipo, ((precio_unitario / 1e18) * cantidad) AS monto,
+                   cantidad,
+                   tx_hash, 'Compra en marketplace' AS descripcion, created_at AS fecha
+            FROM marketplace_trades WHERE buyer_id = ?
 
             UNION ALL
 
@@ -146,7 +153,7 @@ public class WalletRepository {
         """;
 
         List<Object> params = new ArrayList<>(List.of(
-            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
+            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
         ));
 
         if (desde != null) {
@@ -161,14 +168,17 @@ public class WalletRepository {
         sql += " ORDER BY fecha DESC";
 
         return jdbc.query(sql,
-            (rs, rowNum) -> WalletHistoryItem.builder()
-                .tipo(rs.getString("tipo"))
-                .monto(rs.getBigDecimal("monto"))
-                .cantidad((Long) rs.getObject("cantidad"))
-                .txHash(rs.getString("tx_hash"))
-                .descripcion(rs.getString("descripcion"))
-                .fecha(rs.getTimestamp("fecha").toLocalDateTime())
-                .build(),
+            (rs, rowNum) -> {
+                Number cantidadObj = (Number) rs.getObject("cantidad");
+                return WalletHistoryItem.builder()
+                    .tipo(rs.getString("tipo"))
+                    .monto(rs.getBigDecimal("monto"))
+                    .cantidad(cantidadObj != null ? cantidadObj.longValue() : null)
+                    .txHash(rs.getString("tx_hash"))
+                    .descripcion(rs.getString("descripcion"))
+                    .fecha(rs.getTimestamp("fecha").toLocalDateTime())
+                    .build();
+            },
             params.toArray()
         );
     }

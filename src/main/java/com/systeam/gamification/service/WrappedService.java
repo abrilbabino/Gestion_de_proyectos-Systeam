@@ -135,8 +135,11 @@ public class WrappedService {
             response.setTransaccionesMarketplace(txMarketplace != null ? txMarketplace : 0);
 
             String sqlMarketplaceVol = "SELECT COALESCE(SUM(precio_unitario * cantidad_inicial), 0) FROM order_book WHERE seller_id = ?";
-            BigDecimal volMarketplace = jdbcTemplate.queryForObject(sqlMarketplaceVol, BigDecimal.class, userId);
-            response.setVolumenMarketplace(volMarketplace);
+            BigDecimal volMarketplaceWei = jdbcTemplate.queryForObject(sqlMarketplaceVol, BigDecimal.class, userId);
+            BigDecimal weiConversion = new BigDecimal("1000000000000000000");
+            BigDecimal volMarketplaceIdea = (volMarketplaceWei != null) ? 
+                volMarketplaceWei.divide(weiConversion, 4, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            response.setVolumenMarketplace(volMarketplaceIdea);
         } catch (Exception e) {
             response.setTransaccionesMarketplace(0);
             response.setVolumenMarketplace(BigDecimal.ZERO);

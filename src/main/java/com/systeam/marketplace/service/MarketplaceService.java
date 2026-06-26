@@ -92,10 +92,10 @@ public class MarketplaceService {
         }
 
         Long listingId = jdbc.queryForObject("""
-            INSERT INTO order_book (seller_id, subtoken_id, cantidad, cantidad_inicial, precio_unitario, estado, tx_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, NOW(), NOW())
+            INSERT INTO order_book (seller_id, subtoken_id, cantidad, cantidad_inicial, precio_unitario, estado, tx_hash, on_chain_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, NOW(), NOW())
             RETURNING id
-            """, Long.class, sellerId, request.getSubtokenId(), request.getCantidad(), request.getCantidad(), request.getPrecioUnitario(), request.getTxHash());
+            """, Long.class, sellerId, request.getSubtokenId(), request.getCantidad(), request.getCantidad(), request.getPrecioUnitario(), request.getTxHash(), request.getOnChainId());
 
         jdbc.update("""
             UPDATE portfolio_activos SET cantidad = cantidad - ?, updated_at = NOW()
@@ -162,6 +162,10 @@ public class MarketplaceService {
         jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", requiredIdea, sellerId);
 
         subtokenService.addPortfolioEntry(buyerId, subtokenId, cantidad.intValue());
+
+        // Registrar trade en el historial
+        jdbc.update("INSERT INTO marketplace_trades (listing_id, buyer_id, seller_id, cantidad, precio_unitario, tx_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+            listingId, buyerId, sellerId, cantidad.intValue(), precioUnitario, txHash);
 
         BigInteger newCantidad = available.subtract(cantidad);
         if (newCantidad.compareTo(BigInteger.ZERO) == 0) {

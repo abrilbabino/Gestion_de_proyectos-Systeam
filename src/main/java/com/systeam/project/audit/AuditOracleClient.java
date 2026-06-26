@@ -26,14 +26,18 @@ import com.systeam.config.BlockchainProperties;
 import com.systeam.project.audit.dto.ResultadoAuditoria;
 
 /**
- * Thin client that submits audit findings to the on-chain oracle contract.
- * Degrades gracefully: returns null on zero-address, timeout, or any exception.
+ * Client that submits audit findings to the AuditOracle on-chain contract.
+ *
+ * <p>This client does NOT degrade silently. Any failure (misconfigured address,
+ * RPC error, on-chain revert, timeout) throws a {@link RuntimeException} so that
+ * the calling {@code @Transactional} method rolls back and the audit finding is
+ * NOT persisted in PostgreSQL. This guarantees that off-chain state and on-chain
+ * state never diverge.
  */
 @Service
 public class AuditOracleClient {
 
     private static final Logger log = LoggerFactory.getLogger(AuditOracleClient.class);
-    private static final String ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
     private static final int RECEIPT_POLL_ATTEMPTS = 40;
     private static final long RECEIPT_POLL_INTERVAL_MS = 3_000L;
 
@@ -48,9 +52,11 @@ public class AuditOracleClient {
     }
 
     /**
-     * Submits an audit finding to the oracle contract.
+     * Submits an audit finding to the AuditOracle contract.
      *
-     * @return the transaction hash on success, or {@code null} on degradation (zero-address, timeout, error)
+     * @return the transaction hash on success.
+     * @throws IllegalStateException if the contract address is not configured.
+     * @throws RuntimeException      if the RPC call fails, the tx reverts on-chain, or times out.
      */
     public String submitAuditFinding(Long proyectoId,
                                      ResultadoAuditoria resultado,
@@ -58,11 +64,11 @@ public class AuditOracleClient {
                                      String kybUrl) {
         String contractAddress = props.getOracleBillingAddress();
 
-        if (contractAddress == null
-                || contractAddress.isBlank()
-                || ZERO_ADDRESS.equalsIgnoreCase(contractAddress)) {
-            log.debug("AuditOracleClient: zero-address configured — skipping on-chain call");
-            return null;
+        if (contractAddress == null || contractAddress.isBlank()) {
+            throw new IllegalStateException(
+                "AuditOracleClient: blockchain.oracle-billing-address no está configurado. " +
+                "Configure la dirección del contrato AuditOracle antes de auditar proyectos."
+            );
         }
 
         try {
@@ -72,8 +78,14 @@ public class AuditOracleClient {
                     .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             byte[] txHashBytes = Hash.sha3(hashInput);
 
-            // uint8: 0 = APROBADO, 1 = RECHAZADO
-            int resultadoUint8 = (resultado == ResultadoAuditoria.APROBADO) ? 0 : 1;
+            // uint8: 0=APROBADO, 1=RECHAZADO, 2=NECESITA_CAMBIOS (espeja AuditOracle.sol)
+            int resultadoUint8;
+            switch (resultado) {
+                case APROBADO         -> resultadoUint8 = 0;
+                case RECHAZADO        -> resultadoUint8 = 1;
+                case NECESITA_CAMBIOS -> resultadoUint8 = 2;
+                default -> throw new IllegalArgumentException("Resultado desconocido: " + resultado);
+            }
 
             // ABI: submitAuditFinding(uint256 proyectoId, uint8 resultado, string calldata observaciones, bytes32 txHash)
             Function fn = new Function(
@@ -99,26 +111,33 @@ public class AuditOracleClient {
             );
 
             if (response.hasError()) {
-                log.warn("AuditOracleClient: RPC error — {} (proyectoId={})",
-                    response.getError().getMessage(), proyectoId);
-                return null;
+                throw new RuntimeException(
+                    "AuditOracleClient: error RPC al enviar tx (proyectoId=" + proyectoId + "): "
+                    + response.getError().getMessage()
+                );
             }
 
             String txHash = response.getTransactionHash();
-            log.info("AuditOracleClient: submitAuditFinding tx sent — {} (proyectoId={})", txHash, proyectoId);
+            log.info("AuditOracleClient: tx enviada — {} (proyectoId={})", txHash, proyectoId);
 
             TransactionReceipt receipt = waitForReceipt(txHash);
             if (!"0x1".equals(receipt.getStatus())) {
-                log.warn("AuditOracleClient: tx reverted on-chain — {} (proyectoId={})", txHash, proyectoId);
-                return null;
+                throw new RuntimeException(
+                    "AuditOracleClient: la tx revirtió on-chain (proyectoId=" + proyectoId + ", txHash=" + txHash + "). " +
+                    "La auditoría NO fue registrada en la blockchain."
+                );
             }
 
+            log.info("AuditOracleClient: tx confirmada on-chain — {} (proyectoId={})", txHash, proyectoId);
             return txHash;
 
+        } catch (RuntimeException e) {
+            // Re-lanzar para que @Transactional haga rollback en la BD
+            throw e;
         } catch (Exception e) {
-            log.warn("AuditOracleClient: degraded — {} (proyectoId={}). Finding will be saved with tx_hash=null.",
-                e.getMessage(), proyectoId);
-            return null;
+            throw new RuntimeException(
+                "AuditOracleClient: error inesperado al registrar auditoría on-chain (proyectoId=" + proyectoId + ")", e
+            );
         }
     }
 

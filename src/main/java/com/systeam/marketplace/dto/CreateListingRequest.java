@@ -19,6 +19,8 @@ public class CreateListingRequest {
     @NotNull
     private String txHash;
 
+    private BigInteger onChainId;
+
     public Long getSubtokenId() { return subtokenId; }
     public void setSubtokenId(Long subtokenId) { this.subtokenId = subtokenId; }
     public BigInteger getCantidad() { return cantidad; }
@@ -27,4 +29,6 @@ public class CreateListingRequest {
     public void setPrecioUnitario(BigInteger precioUnitario) { this.precioUnitario = precioUnitario; }
     public String getTxHash() { return txHash; }
     public void setTxHash(String txHash) { this.txHash = txHash; }
+    public BigInteger getOnChainId() { return onChainId; }
+    public void setOnChainId(BigInteger onChainId) { this.onChainId = onChainId; }
 }
