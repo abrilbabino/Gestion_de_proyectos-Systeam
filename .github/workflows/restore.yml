@@ -26,8 +26,15 @@ jobs:
           LATEST=$(gcloud storage ls gs://systeam/backups/ | sort | tail -1)
           gcloud storage cp $LATEST backup.sql
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 17 Client
+        run: |
+          # Instalación forzada de versión 17 para asegurar compatibilidad con Supabase
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 wget lsb-release
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Reset public schema contents
         env:
@@ -64,6 +71,4 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
         run: |
-          # Usamos el modo replica para que la restauración ignore restricciones 
-          # y sea compatible con cualquier formato de backup (viejo o nuevo)
           (echo "SET session_replication_role = 'replica';"; cat backup.sql) | psql -d "$PGPASSWORD" --single-transaction -v ON_ERROR_STOP=1
