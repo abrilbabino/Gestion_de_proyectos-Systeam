@@ -62,29 +62,42 @@ public class AuditService {
             throw new InvalidStateTransitionException(proyecto.getEstado(), "EN_AUDITORIA");
         }
 
-        // 3. Oracle call — degrades to null
+        // 3. Oracle call — degrades to null. Pack scores in observaciones as JSON
+        String packedObservaciones = String.format(
+            "{\"riskScore\":\"%s\",\"viability\":%d,\"observaciones\":\"%s\"}",
+            request.getRiskScore() != null ? request.getRiskScore() : "",
+            request.getFinancialViabilityScore() != null ? request.getFinancialViabilityScore() : 0,
+            request.getObservaciones() != null ? request.getObservaciones() : ""
+        );
         String txHash = oracleClient.submitAuditFinding(
             proyectoId,
             request.getResultado(),
-            request.getObservaciones(),
-            request.getKybUrl()
+            packedObservaciones,
+            "https://systeam.com/kyb/not-required"
         );
 
         // 4. Persist finding
         AuditFinding finding = new AuditFinding();
         finding.setProyectoId(proyectoId);
         finding.setAuditorId(auditorId);
-        finding.setKybUrl(request.getKybUrl());
+        finding.setKybUrl("https://systeam.com/kyb/not-required");
         finding.setResultado(request.getResultado().name());
         finding.setObservaciones(request.getObservaciones());
+        finding.setRiskScore(request.getRiskScore());
+        finding.setFinancialViabilityScore(request.getFinancialViabilityScore());
         finding.setTxHash(txHash);
 
         AuditFinding saved = findingRepository.save(finding);
 
         // 5. Transition project state
-        String newEstado = (request.getResultado() == ResultadoAuditoria.APROBADO)
-            ? "AUDITADO"
-            : "RECHAZADO";
+        String newEstado;
+        if (request.getResultado() == ResultadoAuditoria.APROBADO) {
+            newEstado = "AUDITADO";
+        } else if (request.getResultado() == ResultadoAuditoria.NECESITA_CAMBIOS) {
+            newEstado = "PREPARACION";
+        } else {
+            newEstado = "RECHAZADO";
+        }
         projectService.updateProjectStatus(proyectoId, newEstado);
 
         // 6. Publish event
@@ -97,6 +110,8 @@ public class AuditService {
             eventPublisher.publishEvent(
                 new ProjectRejectedEvent(proyectoId, auditorId, saved.getId(), creadorId)
             );
+        } else if (request.getResultado() == ResultadoAuditoria.NECESITA_CAMBIOS) {
+            // Option to publish a ProjectNeedsChangesEvent if desired in the future
         }
 
         return toResponse(saved);
@@ -120,6 +135,8 @@ public class AuditService {
             f.getKybUrl(),
             f.getResultado(),
             f.getObservaciones(),
+            f.getRiskScore(),
+            f.getFinancialViabilityScore(),
             f.getTxHash(),
             f.getCreatedAt()
         );

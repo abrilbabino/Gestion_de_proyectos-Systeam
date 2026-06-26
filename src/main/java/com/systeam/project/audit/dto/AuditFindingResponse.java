@@ -10,6 +10,8 @@ public class AuditFindingResponse {
     private String kybUrl;
     private String resultado;
     private String observaciones;
+    private String riskScore;
+    private Integer financialViabilityScore;
     private String txHash;
     private OffsetDateTime createdAt;
 
@@ -17,6 +19,7 @@ public class AuditFindingResponse {
 
     public AuditFindingResponse(Long id, Long proyectoId, Long auditorId,
                                  String kybUrl, String resultado, String observaciones,
+                                 String riskScore, Integer financialViabilityScore,
                                  String txHash, OffsetDateTime createdAt) {
         this.id = id;
         this.proyectoId = proyectoId;
@@ -24,6 +27,8 @@ public class AuditFindingResponse {
         this.kybUrl = kybUrl;
         this.resultado = resultado;
         this.observaciones = observaciones;
+        this.riskScore = riskScore;
+        this.financialViabilityScore = financialViabilityScore;
         this.txHash = txHash;
         this.createdAt = createdAt;
     }
@@ -51,4 +56,10 @@ public class AuditFindingResponse {
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getRiskScore() { return riskScore; }
+    public void setRiskScore(String riskScore) { this.riskScore = riskScore; }
+
+    public Integer getFinancialViabilityScore() { return financialViabilityScore; }
+    public void setFinancialViabilityScore(Integer financialViabilityScore) { this.financialViabilityScore = financialViabilityScore; }
 }

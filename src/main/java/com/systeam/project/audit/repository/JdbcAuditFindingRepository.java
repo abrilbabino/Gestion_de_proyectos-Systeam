@@ -30,6 +30,8 @@ public class JdbcAuditFindingRepository {
         f.setKybUrl(rs.getString("kyb_url"));
         f.setResultado(rs.getString("resultado"));
         f.setObservaciones(rs.getString("observaciones"));
+        f.setRiskScore(rs.getString("risk_score"));
+        f.setFinancialViabilityScore(rs.getObject("financial_viability_score", Integer.class));
         f.setTxHash(rs.getString("tx_hash"));
 
         Timestamp createdAt = rs.getTimestamp("created_at");
@@ -46,9 +48,9 @@ public class JdbcAuditFindingRepository {
     public AuditFinding save(AuditFinding finding) {
         String sql = """
             INSERT INTO audit_findings
-                (proyecto_id, auditor_id, kyb_url, resultado, observaciones, tx_hash, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-            RETURNING id, proyecto_id, auditor_id, kyb_url, resultado, observaciones, tx_hash, created_at
+                (proyecto_id, auditor_id, kyb_url, resultado, observaciones, risk_score, financial_viability_score, tx_hash, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            RETURNING id, proyecto_id, auditor_id, kyb_url, resultado, observaciones, risk_score, financial_viability_score, tx_hash, created_at
             """;
 
         return jdbc.queryForObject(sql, rowMapper,
@@ -57,6 +59,8 @@ public class JdbcAuditFindingRepository {
             finding.getKybUrl(),
             finding.getResultado(),
             finding.getObservaciones(),
+            finding.getRiskScore(),
+            finding.getFinancialViabilityScore(),
             finding.getTxHash()
         );
     }
@@ -66,7 +70,7 @@ public class JdbcAuditFindingRepository {
      */
     public List<AuditFinding> findByProyectoIdOrderByCreatedAtDesc(Long proyectoId) {
         return jdbc.query(
-            "SELECT id, proyecto_id, auditor_id, kyb_url, resultado, observaciones, tx_hash, created_at " +
+            "SELECT id, proyecto_id, auditor_id, kyb_url, resultado, observaciones, risk_score, financial_viability_score, tx_hash, created_at " +
             "FROM audit_findings WHERE proyecto_id = ? ORDER BY created_at DESC",
             rowMapper,
             proyectoId

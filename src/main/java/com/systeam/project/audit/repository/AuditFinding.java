@@ -13,6 +13,8 @@ public class AuditFinding {
     private String kybUrl;
     private String resultado;
     private String observaciones;
+    private String riskScore;
+    private Integer financialViabilityScore;
     private String txHash;
     private OffsetDateTime createdAt;
 
@@ -40,5 +42,11 @@ public class AuditFinding {
     public void setTxHash(String txHash) { this.txHash = txHash; }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public String getRiskScore() { return riskScore; }
+    public void setRiskScore(String riskScore) { this.riskScore = riskScore; }
+
+    public Integer getFinancialViabilityScore() { return financialViabilityScore; }
+    public void setFinancialViabilityScore(Integer financialViabilityScore) { this.financialViabilityScore = financialViabilityScore; }
+
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 }
