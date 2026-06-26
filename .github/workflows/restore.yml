@@ -40,7 +40,7 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
         run: |
-          psql -d "$PGPASSWORD" <<'EOF'
+          /usr/lib/postgresql/17/bin/psql -d "$PGPASSWORD" <<'EOF'
           DO $$ DECLARE
               r RECORD;
           BEGIN
@@ -71,4 +71,8 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
         run: |
-          (echo "SET session_replication_role = 'replica';"; cat backup.sql) | psql -d "$PGPASSWORD" --single-transaction -v ON_ERROR_STOP=1
+          # pg_dump inyecta 'CREATE SCHEMA public;' por defecto al usar '-n public'.
+          # Como nuestro script preserva el esquema para no perder permisos, borramos esa línea del SQL.
+          sed -e '/CREATE SCHEMA public;/d' -e '/CREATE SCHEMA "public";/d' backup.sql > backup_limpio.sql
+          
+          (echo "SET session_replication_role = 'replica';"; cat backup_limpio.sql) | /usr/lib/postgresql/17/bin/psql -d "$PGPASSWORD" --single-transaction -v ON_ERROR_STOP=1
