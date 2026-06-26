@@ -27,21 +27,21 @@ public class RewardService {
      * Idempotent reward accrual. Inserts a ledger row and credits the user's wallet.
      * Returns false if the reward was already ledgered (no double-credit).
      */
-    @Transactional
     public boolean accrue(Long userId, String reason, String refType,
                           Long refId, String txHash, BigDecimal amount) {
-        boolean inserted = rewardLedgerRepository.insertIfAbsent(
-                userId, reason, refType, refId, txHash, amount);
-
-        if (!inserted) {
+        // Check idempotency before minting
+        if (rewardLedgerRepository.existsByUserAndRef(userId, reason, refType, refId)) {
             log.info("Reward already ledgered for user={} reason={} refType={} refId={}",
                     userId, reason, refType, refId);
             return false;
         }
 
-        walletService.adjustBalance(userId, amount);
-        log.info("Reward accrued: user={} reason={} refType={} refId={} amount={}",
-                userId, reason, refType, refId, amount);
+        // Mint on-chain if user has wallet, otherwise credit off-chain
+        String resolvedTxHash = txHash != null ? txHash : walletService.mintIdeaReward(userId, amount);
+
+        rewardLedgerRepository.insertIfAbsent(userId, reason, refType, refId, resolvedTxHash, amount);
+        log.info("Reward accrued: user={} reason={} refType={} refId={} amount={} txHash={}",
+                userId, reason, refType, refId, amount, resolvedTxHash);
         return true;
     }
 }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.systeam.wallet.dto.TransferTokensResponse;
 import com.systeam.wallet.dto.WalletHistoryItem;
@@ -120,12 +121,32 @@ public class WalletRepository {
                    rl.created_at AS fecha
             FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'EVENT_ATTENDANCE'
 
+            UNION ALL
+
+            SELECT 'REFERRAL_RECOMPENSA' AS tipo,
+                   rl.amount AS monto,
+                   NULL AS cantidad,
+                   rl.tx_hash,
+                   'Recompensa por referido' AS descripcion,
+                   rl.created_at AS fecha
+            FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'REFERRAL_REWARD'
+
+            UNION ALL
+
+            SELECT 'RACHA_RECOMPENSA' AS tipo,
+                   rl.amount AS monto,
+                   NULL AS cantidad,
+                   rl.tx_hash,
+                   'Recompensa por racha diaria' AS descripcion,
+                   rl.created_at AS fecha
+            FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'DAILY_STREAK'
+
         ) historial
         WHERE 1=1
         """;
 
         List<Object> params = new ArrayList<>(List.of(
-            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
+            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
         ));
 
         if (desde != null) {
@@ -162,6 +183,12 @@ public class WalletRepository {
 
     public void updateWalletAddress(Long userId, String walletAddress) {
         jdbc.update("UPDATE users SET wallet_address = ? WHERE id = ?", walletAddress, userId);
+    }
+
+    public Optional<String> findWalletAddress(Long userId) {
+        List<String> rows = jdbc.queryForList(
+            "SELECT wallet_address FROM users WHERE id = ?", String.class, userId);
+        return rows.isEmpty() ? Optional.empty() : Optional.ofNullable(rows.get(0));
     }
 
     public boolean userExists(Long userId) {

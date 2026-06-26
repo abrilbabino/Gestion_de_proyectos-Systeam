@@ -1,6 +1,7 @@
 package com.systeam.wallet.service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -138,6 +139,27 @@ public class WalletService {
         if (currentBalance == null || currentBalance.compareTo(requiredAmount) < 0) {
             throw new ConflictException("Saldo insuficiente para realizar la operación");
         }
+    }
+
+    public String mintIdeaReward(Long userId, BigDecimal amount) {
+        return walletRepository.findWalletAddress(userId)
+            .filter(addr -> addr != null && !addr.isBlank())
+            .map(addr -> {
+                try {
+                    BigInteger amountWei = amount.multiply(BigDecimal.TEN.pow(18)).toBigInteger();
+                    String txHash = blockchainService.transferIdea(addr, amountWei);
+                    log.info("On-chain IDEA reward: user={} amount={} txHash={}", userId, amount, txHash);
+                    return txHash;
+                } catch (Exception e) {
+                    log.warn("On-chain IDEA reward failed for user={}, falling back to off-chain: {}", userId, e.getMessage());
+                    adjustBalance(userId, amount);
+                    return null;
+                }
+            })
+            .orElseGet(() -> {
+                adjustBalance(userId, amount);
+                return null;
+            });
     }
 
     @Transactional
