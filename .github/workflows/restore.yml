@@ -1,0 +1,33 @@
+name: Restore Database
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/889190443263/locations/global/workloadIdentityPools/gh-pool-tofu/providers/gh-provider-tofu'
+          service_account: 'tofu-runner@project-1944cf83-7f15-4f33-89b.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download latest backup from GCS
+        run: |
+          LATEST=$(gcloud storage ls gs://systeam/backups/ | sort | tail -1)
+          gcloud storage cp $LATEST backup.sql
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Restore database
+        run: psql "${{ secrets.SUPABASE_DB_URL_PRUEBA }}" -f backup.sql
