@@ -10,7 +10,7 @@ jobs:
       id-token: 'write'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
@@ -26,8 +26,49 @@ jobs:
           LATEST=$(gcloud storage ls gs://systeam/backups/ | sort | tail -1)
           gcloud storage cp $LATEST backup.sql
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 17 Client
+        run: |
+          # Instalación forzada de versión 17 para asegurar compatibilidad con Supabase
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 wget lsb-release
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Reset public schema contents
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
+        run: |
+          psql -d "$PGPASSWORD" <<'EOF'
+          DO $$ DECLARE
+              r RECORD;
+          BEGIN
+              FOR r IN (SELECT table_name FROM information_schema.views WHERE table_schema = 'public') LOOP
+                  EXECUTE 'DROP VIEW IF EXISTS public.' || quote_ident(r.table_name) || ' CASCADE';
+              END LOOP;
+
+              FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                  EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
+              END LOOP;
+
+              FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e') LOOP
+                  EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
+              END LOOP;
+
+              FOR r IN (
+                  SELECT p.oid::regprocedure AS func_signature
+                  FROM pg_proc p
+                  JOIN pg_namespace n ON n.oid = p.pronamespace
+                  WHERE n.nspname = 'public'
+              ) LOOP
+                  EXECUTE 'DROP FUNCTION IF EXISTS ' || r.func_signature || ' CASCADE';
+              END LOOP;
+          END $$;
+          EOF
 
       - name: Restore database
-        run: psql "${{ secrets.SUPABASE_DB_URL_PRUEBA }}" -f backup.sql
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_URL_PRUEBA }}
+        run: |
+          (echo "SET session_replication_role = 'replica';"; cat backup.sql) | psql -d "$PGPASSWORD" --single-transaction -v ON_ERROR_STOP=1

@@ -2,29 +2,38 @@ name: Backup Database
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Se ejecuta todos los días a las 3:00 AM
-  workflow_dispatch: # Permite dispararlo manualmente desde la web de GitHub
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Necesario para la federación de identidades
+      id-token: 'write'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Supabase CLI
-        run: npm install -g supabase
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get remove -y postgresql-client postgresql-client-common
+          sudo apt-get autoremove -y
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 wget lsb-release
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Run Backup
+        # Mantenemos tu env para consistencia, aunque pg_dump lee la URI directa
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" -f schema.sql
-          supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" --data-only --use-copy -f data.sql
-          cat schema.sql data.sql > backup.sql
-
+          /usr/lib/postgresql/17/bin/pg_dump --verbose --no-owner --no-privileges -n public "${{ secrets.SUPABASE_DB_URL }}" -f backup.sql
+      
       - name: Auth to GCP
         uses: google-github-actions/auth@v2
         with:
