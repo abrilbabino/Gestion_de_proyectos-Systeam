@@ -21,40 +21,41 @@ public class StreakRepository {
 
     public StreakStatus checkIn(Long userId) {
         LocalDate today = LocalDate.now();
-        LocalDate yesterday = today.minusDays(1);
 
-        List<Map<String, Object>> rows = jdbc.queryForList(
-            "SELECT current_streak, longest_streak, last_check_in FROM user_streaks WHERE user_id = ?", userId
-        );
-
-        if (rows.isEmpty()) {
-            jdbc.update(
-                "INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_check_in, updated_at) VALUES (?, 1, 1, ?, now())",
-                userId, Date.valueOf(today)
-            );
-            return new StreakStatus(userId, 1, 1, today, false);
-        }
+        // Single atomic UPSERT — eliminates TOCTOU between SELECT and INSERT/UPDATE
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+            INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_check_in, updated_at)
+            VALUES (?, 1, 1, CURRENT_DATE, now())
+            ON CONFLICT (user_id) DO UPDATE SET
+              current_streak = CASE
+                WHEN user_streaks.last_check_in = CURRENT_DATE         THEN user_streaks.current_streak
+                WHEN user_streaks.last_check_in = CURRENT_DATE - 1     THEN user_streaks.current_streak + 1
+                ELSE 1
+              END,
+              longest_streak = GREATEST(
+                user_streaks.longest_streak,
+                CASE
+                  WHEN user_streaks.last_check_in = CURRENT_DATE         THEN user_streaks.current_streak
+                  WHEN user_streaks.last_check_in = CURRENT_DATE - 1     THEN user_streaks.current_streak + 1
+                  ELSE 1
+                END
+              ),
+              last_check_in = CASE
+                WHEN user_streaks.last_check_in = CURRENT_DATE THEN user_streaks.last_check_in
+                ELSE CURRENT_DATE
+              END,
+              updated_at = now()
+            RETURNING current_streak, longest_streak, last_check_in
+            """, userId);
 
         Map<String, Object> row = rows.get(0);
-        LocalDate lastCheckIn = row.get("last_check_in") != null
-            ? ((Date) row.get("last_check_in")).toLocalDate()
-            : null;
+        LocalDate lastCheckIn = ((Date) row.get("last_check_in")).toLocalDate();
         int currentStreak = ((Number) row.get("current_streak")).intValue();
         int longestStreak = ((Number) row.get("longest_streak")).intValue();
 
-        if (today.equals(lastCheckIn)) {
-            return new StreakStatus(userId, currentStreak, longestStreak, lastCheckIn, true);
-        }
-
-        int newStreak = yesterday.equals(lastCheckIn) ? currentStreak + 1 : 1;
-        int newLongest = Math.max(longestStreak, newStreak);
-
-        jdbc.update(
-            "UPDATE user_streaks SET current_streak = ?, longest_streak = ?, last_check_in = ?, updated_at = now() WHERE user_id = ?",
-            newStreak, newLongest, Date.valueOf(today), userId
-        );
-
-        return new StreakStatus(userId, newStreak, newLongest, today, false);
+        // alreadyCheckedInToday is intentionally false: accrue() uses the reward_ledger
+        // ON CONFLICT as its own idempotency guard, so double-calling is safe.
+        return new StreakStatus(userId, currentStreak, longestStreak, lastCheckIn, false);
     }
 
     public Optional<StreakStatus> findByUser(Long userId) {

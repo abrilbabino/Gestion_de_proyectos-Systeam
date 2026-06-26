@@ -6,6 +6,7 @@ import com.systeam.referrals.dto.ReferralStatsResponse;
 import com.systeam.referrals.repository.ReferralRepository;
 import com.systeam.rewards.service.RewardService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -38,11 +39,15 @@ public class ReferralService {
         if (referrerId.equals(refereeId)) {
             throw new ConflictException("No podés usar tu propio código");
         }
-        if (referralRepository.refereeExists(refereeId)) {
+
+        Long referralId;
+        try {
+            referralId = referralRepository.insertReferral(referrerId, refereeId, code);
+        } catch (DataIntegrityViolationException e) {
+            // referee_id UNIQUE constraint — concurrent or duplicate redeem attempt
             throw new ConflictException("Ya fuiste referido por alguien");
         }
 
-        Long referralId = referralRepository.insertReferral(referrerId, refereeId, code);
         rewardService.accrue(referrerId, "REFERRAL_REWARD", "referral", referralId, null, REFERRAL_REWARD);
     }
 

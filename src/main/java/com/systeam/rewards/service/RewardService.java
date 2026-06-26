@@ -29,19 +29,27 @@ public class RewardService {
      */
     public boolean accrue(Long userId, String reason, String refType,
                           Long refId, String txHash, BigDecimal amount) {
-        // Check idempotency before minting
-        if (rewardLedgerRepository.existsByUserAndRef(userId, reason, refType, refId)) {
+        // Insert into ledger first — ON CONFLICT DO NOTHING is the atomic idempotency guard.
+        // This prevents double-spend: only the request that wins the insert proceeds to mint.
+        boolean inserted = rewardLedgerRepository.insertIfAbsent(
+                userId, reason, refType, refId, txHash, amount);
+
+        if (!inserted) {
             log.info("Reward already ledgered for user={} reason={} refType={} refId={}",
                     userId, reason, refType, refId);
             return false;
         }
 
-        // Mint on-chain if user has wallet, otherwise credit off-chain
-        String resolvedTxHash = txHash != null ? txHash : walletService.mintIdeaReward(userId, amount);
+        // Safe to mint/credit now — we hold the ledger row exclusively
+        if (txHash == null) {
+            String resolvedTxHash = walletService.mintIdeaReward(userId, amount);
+            if (resolvedTxHash != null) {
+                rewardLedgerRepository.updateTxHash(userId, reason, refType, refId, resolvedTxHash);
+            }
+        }
 
-        rewardLedgerRepository.insertIfAbsent(userId, reason, refType, refId, resolvedTxHash, amount);
-        log.info("Reward accrued: user={} reason={} refType={} refId={} amount={} txHash={}",
-                userId, reason, refType, refId, amount, resolvedTxHash);
+        log.info("Reward accrued: user={} reason={} refType={} refId={} amount={}",
+                userId, reason, refType, refId, amount);
         return true;
     }
 }

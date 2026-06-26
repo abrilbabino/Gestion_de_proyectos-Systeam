@@ -162,15 +162,11 @@ public class WalletService {
             });
     }
 
-    @Transactional
     public void adjustBalance(Long userId, BigDecimal signedAmount) {
-        if (signedAmount.signum() < 0) {
-            BigDecimal currentBalance = walletRepository.findSaldoIdea(userId);
-            if (currentBalance == null || currentBalance.add(signedAmount).signum() < 0) {
-                throw new ConflictException("Saldo insuficiente para realizar la operación");
-            }
+        boolean updated = walletRepository.adjustSaldoIdea(userId, signedAmount);
+        if (!updated) {
+            throw new ConflictException("Saldo insuficiente para realizar la operación");
         }
-        walletRepository.adjustSaldoIdea(userId, signedAmount);
     }
 
     public List<TransferTokensResponse> getTransfers(Long userId) {

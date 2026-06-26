@@ -32,6 +32,12 @@ public class RewardLedgerRepository {
     /**
      * Checks whether a ledger entry exists for the given user and reference.
      */
+    public void updateTxHash(Long userId, String reason, String refType, Long refId, String txHash) {
+        jdbc.update(
+                "UPDATE reward_ledger SET tx_hash = ? WHERE user_id = ? AND reason = ? AND ref_type = ? AND ref_id = ?",
+                txHash, userId, reason, refType, refId);
+    }
+
     public boolean existsByUserAndRef(Long userId, String reason, String refType, Long refId) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM reward_ledger WHERE reason = ? AND ref_type = ? AND ref_id = ? AND user_id = ?",

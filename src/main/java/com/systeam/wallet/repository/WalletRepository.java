@@ -205,8 +205,12 @@ public class WalletRepository {
         return count != null && count > 0;
     }
 
-    public void adjustSaldoIdea(Long userId, BigDecimal signedAmount) {
-        jdbc.update("UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ?", signedAmount, userId);
+    public boolean adjustSaldoIdea(Long userId, BigDecimal signedAmount) {
+        // Atomic conditional UPDATE — prevents race between balance check and debit
+        int rows = jdbc.update(
+            "UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ? AND (saldo_idea + ? >= 0 OR ? >= 0)",
+            signedAmount, userId, signedAmount, signedAmount);
+        return rows > 0;
     }
 
     public void debitAndCredit(Long fromUserId, Long toUserId, BigDecimal amount) {
