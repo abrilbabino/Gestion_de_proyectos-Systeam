@@ -28,6 +28,7 @@ import com.systeam.project.dto.UpdateProjectRequest;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.project.repository.ProjectRepository;
+import com.systeam.user.repository.UserRepository;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.TokenizationService;
@@ -47,16 +48,22 @@ class ProjectServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private UserRepository userRepository;
+
     private ProjectService projectService;
 
     private Proyecto proyectoBase;
 
     @BeforeEach
     void setUp() {
-        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher);
+        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher, userRepository);
         Usuario creador = new Usuario();
         creador.setId(1L);
+        creador.setKycStatus("VERIFIED");
 
+        Proyecto dummy = new Proyecto();
+        dummy.setId(100L);
         proyectoBase = new Proyecto();
         proyectoBase.setId(1L);
         proyectoBase.setCreador(creador);
@@ -67,6 +74,8 @@ class ProjectServiceTest {
         proyectoBase.setGobernanzaComunidad(false);
         proyectoBase.setCreatedAt(LocalDateTime.now());
         proyectoBase.setUpdatedAt(LocalDateTime.now());
+
+        lenient().when(userRepository.findById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Optional.of(creador));
     }
 
     @Test

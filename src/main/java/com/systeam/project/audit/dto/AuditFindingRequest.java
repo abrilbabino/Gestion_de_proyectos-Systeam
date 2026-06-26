@@ -7,7 +7,6 @@ import jakarta.validation.constraints.Size;
 
 public class AuditFindingRequest {
 
-    @NotBlank(message = "kyb_url is required")
     @Pattern(
         regexp = "^https?://.+",
         message = "kyb_url must be a valid HTTP or HTTPS URL"
@@ -21,6 +20,11 @@ public class AuditFindingRequest {
     @Size(max = 2000, message = "observaciones must not exceed 2000 characters")
     private String observaciones;
 
+    @Size(max = 2, message = "riskScore must not exceed 2 characters")
+    private String riskScore;
+
+    private Integer financialViabilityScore;
+
     public String getKybUrl() { return kybUrl; }
     public void setKybUrl(String kybUrl) { this.kybUrl = kybUrl; }
 
@@ -29,4 +33,10 @@ public class AuditFindingRequest {
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
+
+    public String getRiskScore() { return riskScore; }
+    public void setRiskScore(String riskScore) { this.riskScore = riskScore; }
+
+    public Integer getFinancialViabilityScore() { return financialViabilityScore; }
+    public void setFinancialViabilityScore(Integer financialViabilityScore) { this.financialViabilityScore = financialViabilityScore; }
 }

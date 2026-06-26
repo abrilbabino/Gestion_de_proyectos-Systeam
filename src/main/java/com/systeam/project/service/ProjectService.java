@@ -21,6 +21,7 @@ import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.UpdateProjectRequest;
 import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
+import com.systeam.user.repository.UserRepository;
 import com.systeam.project.repository.ProjectRepository;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
@@ -35,18 +36,28 @@ public class ProjectService {
     private final TokenizationService tokenizationService;
     private final JdbcTemplate jdbc;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserRepository userRepository;
 
     public ProjectService(ProjectRepository projectRepository,
                           TokenizationService tokenizationService,
                           JdbcTemplate jdbc,
-                          ApplicationEventPublisher eventPublisher) {
+                          ApplicationEventPublisher eventPublisher,
+                          UserRepository userRepository) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
         this.jdbc = jdbc;
         this.eventPublisher = eventPublisher;
+        this.userRepository = userRepository;
     }
 
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
+        Usuario creador = userRepository.findById(creadorId)
+            .orElseThrow(() -> new ConflictException("Usuario creador no encontrado"));
+
+        if (!"VERIFIED".equals(creador.getKycStatus())) {
+            throw new ConflictException("Debes verificar tu identidad antes de poder crear un proyecto.");
+        }
+
         String simbolo = request.getSimbolo().toUpperCase();
 
         Integer count = jdbc.queryForObject(
@@ -54,9 +65,6 @@ public class ProjectService {
         if (count != null && count > 0) {
             throw new ConflictException("El simbolo '" + simbolo + "' ya esta en uso por otro proyecto");
         }
-
-        Usuario creador = new Usuario();
-        creador.setId(creadorId);
 
         Proyecto proyecto = new Proyecto();
         proyecto.setCreador(creador);
