@@ -73,6 +73,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/governance/proposals/*/votes/stream").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/projects/*/votes/stream").permitAll()
                 .requestMatchers("/estado.html", "/static/**", "/css/**", "/js/**").permitAll()
+                // Didit KYC webhook — called directly by Didit, no JWT
+                .requestMatchers("/api/kyc/webhook").permitAll()
                 // Todo lo demás requiere estar autenticado (+ @PreAuthorize en el controller)
                 .anyRequest().authenticated()
             )
