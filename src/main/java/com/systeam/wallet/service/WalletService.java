@@ -8,6 +8,7 @@ import java.util.List;
 
 import com.systeam.blockchain.service.BlockchainService;
 import com.systeam.notificaciones.event.WalletTransferEvent;
+import com.systeam.wallet.dto.RecordSwapRequest;
 import com.systeam.wallet.dto.TransferTokensRequest;
 import com.systeam.wallet.dto.TransferTokensResponse;
 import com.systeam.wallet.dto.WalletHistoryItem;
@@ -132,6 +133,21 @@ public class WalletService {
         eventPublisher.publishEvent(new WalletTransferEvent(emisorId, destinatarioId, cantidad, txHash));
 
         return response;
+    }
+
+    @Transactional
+    public void recordSwap(Long userId, RecordSwapRequest request) {
+        if (walletRepository.txHashExists(request.getTxHash())) {
+            throw new ConflictException("La transacción de Swap ya fue registrada");
+        }
+        
+        // Deduct IDEA and add USDC to off-chain cache
+        if (!walletRepository.adjustSaldoIdea(userId, request.getAmountIdea().negate())) {
+            throw new ConflictException("Saldo insuficiente de $IDEA para registrar el Swap");
+        }
+        walletRepository.adjustSaldoUsdt(userId, request.getAmountUsdc());
+        
+        walletRepository.insertSwap(userId, request.getAmountIdea(), request.getAmountUsdc(), request.getTxHash());
     }
 
     public void checkSufficientBalance(Long userId, BigDecimal requiredAmount) {

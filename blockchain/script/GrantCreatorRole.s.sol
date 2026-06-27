@@ -9,7 +9,8 @@ contract GrantCreatorRole is Script {
         uint256 deployerPK = vm.envUint("BLOCKCHAIN_PRIVATE_KEY");
         address backend = vm.addr(deployerPK);
 
-        address factoryAddr = vm.envAddress("BLOCKCHAIN_IDEAFY_FACTORY");
+        // Usamos la dirección hardcodeada porque la terminal estaba usando una variable vieja en caché
+        address factoryAddr = 0x462051fdda4eF66d00F2BbF4fE530570BF3Fd57A;
 
         vm.startBroadcast(deployerPK);
 
