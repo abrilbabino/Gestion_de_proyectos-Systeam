@@ -60,13 +60,16 @@ class ProjectServiceTest {
     @Mock
     private HitoRepository hitoRepository;
 
+    @Mock
+    private com.systeam.blockchain.service.OfferingContractService offeringContractService;
+
     private ProjectService projectService;
 
     private Proyecto proyectoBase;
 
     @BeforeEach
     void setUp() {
-        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher, userRepository, blockchainService, hitoRepository);
+        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher, userRepository, blockchainService, hitoRepository, offeringContractService);
         Usuario creador = new Usuario();
         creador.setId(1L);
         creador.setKycStatus("VERIFIED");

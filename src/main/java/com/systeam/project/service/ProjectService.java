@@ -33,6 +33,8 @@ import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.TokenizationService;
 import com.systeam.blockchain.service.BlockchainService;
+import com.systeam.blockchain.service.OfferingContractService;
+import java.math.BigInteger;
 
 @Service
 public class ProjectService {
@@ -46,6 +48,7 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final BlockchainService blockchainService;
     private final HitoRepository hitoRepository;
+    private final OfferingContractService offeringContractService;
 
     public ProjectService(ProjectRepository projectRepository,
                           TokenizationService tokenizationService,
@@ -53,7 +56,8 @@ public class ProjectService {
                           ApplicationEventPublisher eventPublisher,
                           UserRepository userRepository,
                           BlockchainService blockchainService,
-                          HitoRepository hitoRepository) {
+                          HitoRepository hitoRepository,
+                          OfferingContractService offeringContractService) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
         this.jdbc = jdbc;
@@ -61,6 +65,7 @@ public class ProjectService {
         this.userRepository = userRepository;
         this.blockchainService = blockchainService;
         this.hitoRepository = hitoRepository;
+        this.offeringContractService = offeringContractService;
     }
 
     @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
@@ -477,6 +482,39 @@ public class ProjectService {
             case "EJECUCION"     -> "FINALIZADO".equals(to);
             default              -> false;  // RECHAZADO, CANCELADO, FINALIZADO are terminal
         };
+    }
+
+    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
+    public void closeProject(Long projectId) {
+        Proyecto proyecto = findProjectOrThrow(projectId);
+        
+        if (!"EJECUCION".equals(proyecto.getEstado())) {
+            throw new ConflictException("Solo se pueden cerrar proyectos en estado EJECUCION.");
+        }
+        
+        List<Hito> hitos = hitoRepository.findByProyectoId(projectId);
+        boolean todosCompletados = hitos.stream()
+                .allMatch(h -> Hito.EstadoHito.COMPLETADO.equals(h.getEstado()));
+                
+        if (!todosCompletados) {
+            throw new ConflictException("No se puede cerrar el proyecto porque hay hitos sin completar.");
+        }
+        
+        updateProjectStatus(projectId, "FINALIZADO");
+    }
+
+    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
+    public String finalizeOfferingOnChain(Long projectId) {
+        Proyecto proyecto = findProjectOrThrow(projectId);
+        if (!List.of("FINANCIAMIENTO", "EJECUCION").contains(proyecto.getEstado())) {
+            throw new ConflictException("El proyecto debe estar en Financiamiento o Ejecución para finalizar la recaudación.");
+        }
+        try {
+            return offeringContractService.finalize(BigInteger.valueOf(projectId));
+        } catch (Exception e) {
+            log.error("Error al finalizar offering on-chain", e);
+            throw new ConflictException("Error en la blockchain: " + e.getMessage());
+        }
     }
 
     private ProjectResponse toResponse(Proyecto proyecto, String simbolo) {

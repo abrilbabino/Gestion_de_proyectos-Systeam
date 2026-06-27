@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
         log.error("Error interno del servidor", ex);
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(Map.of("error", "Error interno del servidor"));
+            .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Error interno del servidor"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -64,7 +64,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleConflict(ConflictException ex) {
         log.warn("Conflicto en la operación: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(Map.of("error", "Conflicto en la operación"));
+            .body(Map.of("error", ex.getMessage()));
     }
 
     @ExceptionHandler(InvalidStateTransitionException.class)
@@ -82,7 +82,7 @@ public class GlobalExceptionHandler {
         log.error("Error no manejado", ex);
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(Map.of("error", "Error interno del servidor"));
+            .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Error interno del servidor"));
     }
 
 }

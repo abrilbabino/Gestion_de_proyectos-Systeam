@@ -193,6 +193,29 @@ public class ProjectController {
         }
     }
 
+    // Solo CREATOR puede finalizar la recaudación en la blockchain
+    @PostMapping("/{id}/finalize")
+    @PreAuthorize("hasAuthority('project:create')")
+    public Map<String, String> finalizeOffering(@PathVariable Long id, @AuthenticationPrincipal JwtPrincipal principal) {
+        ProjectResponse project = projectService.getProjectById(id);
+        if (!project.getCreadorId().equals(principal.userId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Solo el creador puede finalizar la recaudación.");
+        }
+        String txHash = projectService.finalizeOfferingOnChain(id);
+        return Map.of("txHash", txHash);
+    }
+
+    @PatchMapping("/{id}/close")
+    @PreAuthorize("hasAuthority('project:create')")
+    public ProjectResponse closeProject(@PathVariable Long id, @AuthenticationPrincipal JwtPrincipal principal) {
+        ProjectResponse project = projectService.getProjectById(id);
+        if (!project.getCreadorId().equals(principal.userId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Solo el creador puede cerrar el proyecto.");
+        }
+        projectService.closeProject(id);
+        return projectService.getProjectById(id);
+    }
+
     @GetMapping(value = "/{id}/votes/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter projectVoteStream(@PathVariable Long id) {
         return projectVoteStreamRegistry.subscribe(id);
