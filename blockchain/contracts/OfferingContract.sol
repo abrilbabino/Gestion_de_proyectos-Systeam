@@ -195,7 +195,9 @@ contract OfferingContract is AccessControl, ReentrancyGuard {
         Offering storage off = offerings[proyectoId];
         require(off.proyectoId != 0, "Offering: not registered");
         require(!off.finalized, "Offering: already finalized");
-        require(block.timestamp > off.endTime, "Offering: still active");
+        
+        // MODIFICACION APLICADA ACA: Permite cerrar si paso la fecha O si se alcanzo el softCap
+        require(block.timestamp > off.endTime || off.totalInvested >= off.softCap, "Offering: still active");
 
         off.finalized = true;
 

@@ -100,6 +100,12 @@ public class WalletRepository {
 
             UNION ALL
 
+            SELECT 'SWAP' AS tipo, amount_usdc AS monto, CAST(amount_idea AS INTEGER) AS cantidad,
+                   tx_hash AS tx_hash, 'Retiro de ganancias (Swap)' AS descripcion, created_at AS fecha
+            FROM wallet_swaps WHERE usuario_id = ?
+
+            UNION ALL
+
             SELECT 'VOTO' AS tipo,
                    (SELECT vote_cost FROM vote_economics_config WHERE id = 1) AS monto,
                    NULL AS cantidad,
@@ -148,12 +154,12 @@ public class WalletRepository {
                    rl.created_at AS fecha
             FROM reward_ledger rl WHERE rl.user_id = ? AND rl.reason = 'DAILY_STREAK'
 
-        ) historial
+        ) AS history
         WHERE 1=1
         """;
 
         List<Object> params = new ArrayList<>(List.of(
-            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
+            usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId
         ));
 
         if (desde != null) {
@@ -180,6 +186,13 @@ public class WalletRepository {
                     .build();
             },
             params.toArray()
+        );
+    }
+
+    public void insertSwap(Long userId, BigDecimal amountIdea, BigDecimal amountUsdc, String txHash) {
+        jdbc.update(
+            "INSERT INTO wallet_swaps (usuario_id, amount_idea, amount_usdc, tx_hash, created_at) VALUES (?, ?, ?, ?, NOW())",
+            userId, amountIdea, amountUsdc, txHash
         );
     }
 
@@ -219,6 +232,13 @@ public class WalletRepository {
         // Atomic conditional UPDATE — prevents race between balance check and debit
         int rows = jdbc.update(
             "UPDATE users SET saldo_idea = saldo_idea + ? WHERE id = ? AND (saldo_idea + ? >= 0 OR ? >= 0)",
+            signedAmount, userId, signedAmount, signedAmount);
+        return rows > 0;
+    }
+
+    public boolean adjustSaldoUsdt(Long userId, BigDecimal signedAmount) {
+        int rows = jdbc.update(
+            "UPDATE users SET saldo_usdt = saldo_usdt + ? WHERE id = ? AND (saldo_usdt + ? >= 0 OR ? >= 0)",
             signedAmount, userId, signedAmount, signedAmount);
         return rows > 0;
     }

@@ -33,6 +33,7 @@ import com.systeam.tokenization.service.SubtokenService;
 import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.OfferingContractService;
 import java.math.BigInteger;
+import com.systeam.blockchain.service.SetBonusNFTService;
 
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -49,6 +50,7 @@ public class InvestmentService {
     private final IdeafyFactoryService ideafyFactoryService;
     private final OfferingContractService offeringContractService;
     private final ApplicationEventPublisher eventPublisher;
+    private final SetBonusNFTService setBonusNFTService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
@@ -57,7 +59,8 @@ public class InvestmentService {
                              DynamicPricingService dynamicPricingService,
                              IdeafyFactoryService ideafyFactoryService,
                              OfferingContractService offeringContractService,
-                             ApplicationEventPublisher eventPublisher) {
+                             ApplicationEventPublisher eventPublisher,
+                             SetBonusNFTService setBonusNFTService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.jdbc = jdbc;
@@ -66,6 +69,7 @@ public class InvestmentService {
         this.ideafyFactoryService = ideafyFactoryService;
         this.offeringContractService = offeringContractService;
         this.eventPublisher = eventPublisher;
+        this.setBonusNFTService = setBonusNFTService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
@@ -529,14 +533,25 @@ public class InvestmentService {
                     }
                 }
                 
-                // 2. Multiplicador por Set Bonus NFT
+                // 2. Multiplicador por Set Bonus NFT REAL
+                // 1=Common, 2=Rare, 3=Epic, 4=Legendary
                 BigDecimal multiplierSetBonus = BigDecimal.ONE;
-                if (totalProyectos >= 5) {
-                    multiplierSetBonus = new BigDecimal("1.75"); // Arquitecto IDEAFY
-                } else if (totalProyectos >= 3) {
-                    multiplierSetBonus = new BigDecimal("1.5");  // Trilogía IDEAFY
-                } else if (totalProyectos >= 2) {
-                    multiplierSetBonus = new BigDecimal("1.25"); // Duo IDEAFY
+                String walletAddress = null;
+                try {
+                    walletAddress = jdbc.queryForObject(
+                        "SELECT wallet_address FROM users WHERE id = ?", String.class, usuarioId
+                    );
+                } catch (Exception ignored) { }
+                
+                if (walletAddress != null) {
+                    int rarity = setBonusNFTService.getHighestRarity(walletAddress);
+                    switch (rarity) {
+                        case 4: multiplierSetBonus = new BigDecimal("1.75"); break; // Legendary
+                        case 3: multiplierSetBonus = new BigDecimal("1.50"); break; // Epic
+                        case 2: multiplierSetBonus = new BigDecimal("1.25"); break; // Rare
+                        case 1: multiplierSetBonus = new BigDecimal("1.10"); break; // Common
+                        default: multiplierSetBonus = BigDecimal.ONE; break; // None
+                    }
                 }
                 
                 // 3. Regla Opción B (El Mayor Gana)

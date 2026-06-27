@@ -20,6 +20,7 @@ import com.systeam.security.JwtPrincipal;
 import com.systeam.wallet.dto.TransferTokensRequest;
 import com.systeam.wallet.dto.TransferTokensResponse;
 import com.systeam.wallet.dto.UpdateWalletAddressRequest;
+import com.systeam.wallet.dto.RecordSwapRequest;
 import com.systeam.wallet.dto.WalletHistoryItem;
 import com.systeam.wallet.dto.WalletSummaryResponse;
 import com.systeam.wallet.dto.WalletSyncRequest;
@@ -79,5 +80,14 @@ public class WalletController {
             @AuthenticationPrincipal JwtPrincipal principal,
             @RequestBody @Valid UpdateWalletAddressRequest request) {
         walletService.updateWalletAddress(principal.userId(), request.getWalletAddress());
+    }
+
+    @PostMapping("/swap")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("isAuthenticated()")
+    public void recordSwap(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @RequestBody @Valid RecordSwapRequest request) {
+        walletService.recordSwap(principal.userId(), request);
     }
 }

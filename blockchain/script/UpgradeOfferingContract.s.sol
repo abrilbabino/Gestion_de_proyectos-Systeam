@@ -18,7 +18,8 @@ contract UpgradeOfferingContract is Script {
 
         // Variables existentes en el .env (se asume que ya existen)
         address ideaToken = vm.envAddress("BLOCKCHAIN_IDEA_TOKEN");
-        address factory = vm.envAddress("BLOCKCHAIN_IDEAFY_FACTORY");
+        // Usamos la dirección hardcodeada para evitar la caché vieja de la terminal
+        address factory = 0x462051fdda4eF66d00F2BbF4fE530570BF3Fd57A;
         address auditOracle = vm.envAddress("BLOCKCHAIN_AUDIT_ORACLE"); // Si no está en el .env, ponerla manual
 
         vm.startBroadcast(deployerPK);

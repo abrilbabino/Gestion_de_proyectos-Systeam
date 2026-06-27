@@ -11,14 +11,20 @@ import com.systeam.security.JwtPrincipal;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.systeam.blockchain.service.SetBonusNFTService;
+import com.systeam.blockchain.service.SetBonusNFTService.NFTDto;
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/dashboard/gamification")
 public class GamificationController {
 
     private final JdbcTemplate jdbc;
+    private final SetBonusNFTService setBonusNFTService;
 
-    public GamificationController(JdbcTemplate jdbc) {
+    public GamificationController(JdbcTemplate jdbc, SetBonusNFTService setBonusNFTService) {
         this.jdbc = jdbc;
+        this.setBonusNFTService = setBonusNFTService;
     }
 
     @GetMapping
@@ -61,5 +67,23 @@ public class GamificationController {
             defaultData.put("creadores_distintos", 0);
             return defaultData;
         }
+    }
+
+    @GetMapping("/nfts")
+    @PreAuthorize("isAuthenticated()")
+    public List<NFTDto> getMyNFTs(@org.springframework.security.core.annotation.AuthenticationPrincipal JwtPrincipal principal) {
+        Long currentUserId = principal.userId();
+        String walletAddress = null;
+        try {
+            walletAddress = jdbc.queryForObject(
+                "SELECT wallet_address FROM users WHERE id = ?", String.class, currentUserId
+            );
+        } catch (Exception ignored) { }
+        
+        if (walletAddress == null || walletAddress.isEmpty()) {
+            return List.of();
+        }
+        
+        return setBonusNFTService.getWalletNFTs(walletAddress);
     }
 }
