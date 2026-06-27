@@ -34,6 +34,7 @@ import com.systeam.blockchain.service.IdeafyFactoryService;
 import com.systeam.blockchain.service.OfferingContractService;
 import java.math.BigInteger;
 import com.systeam.blockchain.service.SetBonusNFTService;
+import com.systeam.wallet.service.WalletService;
 
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -51,6 +52,7 @@ public class InvestmentService {
     private final OfferingContractService offeringContractService;
     private final ApplicationEventPublisher eventPublisher;
     private final SetBonusNFTService setBonusNFTService;
+    private final WalletService walletService;
 
     public InvestmentService(InvestmentRepository investmentRepository,
                              SmartContractService smartContractService,
@@ -60,7 +62,8 @@ public class InvestmentService {
                              IdeafyFactoryService ideafyFactoryService,
                              OfferingContractService offeringContractService,
                              ApplicationEventPublisher eventPublisher,
-                             SetBonusNFTService setBonusNFTService) {
+                             SetBonusNFTService setBonusNFTService,
+                             WalletService walletService) {
         this.investmentRepository = investmentRepository;
         this.smartContractService = smartContractService;
         this.jdbc = jdbc;
@@ -70,6 +73,7 @@ public class InvestmentService {
         this.offeringContractService = offeringContractService;
         this.eventPublisher = eventPublisher;
         this.setBonusNFTService = setBonusNFTService;
+        this.walletService = walletService;
     }
 
     public ValidateInvestmentResponse validateInvestment(ValidateInvestmentRequest request, Long usuarioId) {
@@ -101,10 +105,6 @@ public class InvestmentService {
         );
 
         BigDecimal descuentoPorcentaje = getCrossRewardDiscountPercentage(usuarioId, request.getProyectoId());
-        if (descuentoPorcentaje.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal multiplier = BigDecimal.valueOf(100).subtract(descuentoPorcentaje).divide(BigDecimal.valueOf(100));
-            precioSubtoken = precioSubtoken.multiply(multiplier);
-        }
 
         if (cupoRestante <= 0) {
             return ValidateInvestmentResponse.builder()
@@ -209,10 +209,6 @@ public class InvestmentService {
         BigDecimal precioSinDescuento = precioSubtoken;
 
         BigDecimal descuentoPorcentaje = getCrossRewardDiscountPercentage(usuarioId, request.getProyectoId());
-        if (descuentoPorcentaje.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal multiplier = BigDecimal.valueOf(100).subtract(descuentoPorcentaje).divide(BigDecimal.valueOf(100));
-            precioSubtoken = precioSubtoken.multiply(multiplier);
-        }
 
         int subTokens = request.getMontoIdea()
                 .divide(precioSubtoken, 0, RoundingMode.DOWN)
@@ -304,7 +300,17 @@ public class InvestmentService {
 
         Inversion savedInv = investmentRepository.save(inv);
 
-        // Airdrop de Fidelidad eliminado. Se aplica directamente como descuento.
+        // Cashback automático (Airdrop) por Gamificación
+        if (descuentoPorcentaje.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal cashbackAmount = request.getMontoIdea().multiply(descuentoPorcentaje).divide(BigDecimal.valueOf(100), 18, RoundingMode.HALF_UP);
+            try {
+                String cashbackTx = walletService.mintIdeaReward(usuarioId, cashbackAmount);
+                log.info("Cashback de {} IDEA enviado al usuario {} por Gamificacion. Tx: {}", cashbackAmount, usuarioId, cashbackTx);
+            } catch (Exception e) {
+                log.warn("Error enviando cashback de Gamificacion al usuario {}: {}", usuarioId, e.getMessage());
+            }
+        }
+
         eventPublisher.publishEvent(new InvestmentConfirmedEvent(
             usuarioId, request.getProyectoId(), request.getMontoIdea(), subTokens, txHash));
 
@@ -533,29 +539,18 @@ public class InvestmentService {
                     }
                 }
                 
-                // 2. Multiplicador por Set Bonus NFT REAL
-                // 1=Common, 2=Rare, 3=Epic, 4=Legendary
-                BigDecimal multiplierSetBonus = BigDecimal.ONE;
-                String walletAddress = null;
-                try {
-                    walletAddress = jdbc.queryForObject(
-                        "SELECT wallet_address FROM users WHERE id = ?", String.class, usuarioId
-                    );
-                } catch (Exception ignored) { }
-                
-                if (walletAddress != null) {
-                    int rarity = setBonusNFTService.getHighestRarity(walletAddress);
-                    switch (rarity) {
-                        case 4: multiplierSetBonus = new BigDecimal("1.75"); break; // Legendary
-                        case 3: multiplierSetBonus = new BigDecimal("1.50"); break; // Epic
-                        case 2: multiplierSetBonus = new BigDecimal("1.25"); break; // Rare
-                        case 1: multiplierSetBonus = new BigDecimal("1.10"); break; // Common
-                        default: multiplierSetBonus = BigDecimal.ONE; break; // None
-                    }
+                // 2. Multiplicador por Cross-Rewards (Cantidad de Proyectos)
+                BigDecimal multiplierGamification = BigDecimal.ONE;
+                if (totalProyectos >= 5) {
+                    multiplierGamification = new BigDecimal("1.75"); // Arquitecto
+                } else if (totalProyectos >= 3) {
+                    multiplierGamification = new BigDecimal("1.50"); // Trilogía
+                } else if (totalProyectos >= 2) {
+                    multiplierGamification = new BigDecimal("1.25"); // Dúo
                 }
                 
                 // 3. Regla Opción B (El Mayor Gana)
-                BigDecimal finalMultiplier = multiplierLevel.max(multiplierSetBonus);
+                BigDecimal finalMultiplier = multiplierLevel.max(multiplierGamification);
                 
                 return baseDiscount.multiply(finalMultiplier);
             }
