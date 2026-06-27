@@ -53,15 +53,15 @@ public class KycService {
      */
     public String createVerificationSession(Long userId) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         headers.set("x-api-key", apiKey);
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("workflow_id", workflowId);
-        body.put("vendor_data", userId.toString());
-        body.put("callback", returnUrl);
+        org.springframework.util.MultiValueMap<String, String> body = new org.springframework.util.LinkedMultiValueMap<>();
+        body.add("workflow_id", workflowId);
+        body.add("vendor_data", userId.toString());
+        body.add("callback", returnUrl);
 
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        HttpEntity<org.springframework.util.MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
         try {
             log.info("Iniciando sesión en Didit. API URL: {}, Workflow ID: '{}', API Key length: {}", 

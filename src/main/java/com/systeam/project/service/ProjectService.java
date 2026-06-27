@@ -13,8 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.CacheEvict;
+
 
 import com.systeam.notificaciones.event.ProjectStateChangedEvent;
 import com.systeam.project.config.RubroConfig;
@@ -68,7 +67,6 @@ public class ProjectService {
         this.offeringContractService = offeringContractService;
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     @Transactional
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
         Usuario creador = userRepository.findById(creadorId)
@@ -147,7 +145,6 @@ public class ProjectService {
         return toResponse(saved, simbolo);
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     @Transactional
     public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
         Proyecto proyecto = findProjectOrThrow(id);
@@ -245,7 +242,6 @@ public class ProjectService {
     }
 
     @Transactional
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public void publishProject(Long id, String signature, String walletAddress, Long userId) {
         Proyecto proyecto = findProjectOrThrow(id);
         if (!proyecto.getCreador().getId().equals(userId)) {
@@ -270,7 +266,6 @@ public class ProjectService {
     }
 
     @Transactional
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public String releaseEscrowFunds(Long id, BigDecimal amount, String escrowAddress) {
         Proyecto proyecto = findProjectOrThrow(id);
         if (!List.of("EJECUCION", "FINALIZADO").contains(proyecto.getEstado())) {
@@ -320,18 +315,15 @@ public class ProjectService {
         return txHash;
     }
 
-    @Cacheable(value = "projectDetails", key = "#id")
     public ProjectResponse getProjectById(Long id) {
         Proyecto proyecto = findProjectOrThrow(id);
         return toResponse(proyecto, obtenerSimbolo(id));
     }
 
-    @Cacheable(value = "projectsCatalog")
     public Page<ProjectResponse> getAllProjects(Pageable pageable) {
         return projectRepository.findAll(pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
-    @Cacheable(value = "projectsCatalog", key = "(#pageable != null ? #pageable.pageNumber : 0) + '-' + (#estado != null ? #estado : 'all') + '-' + (#search != null ? #search : 'none')")
     public Page<ProjectResponse> getPublicCatalog(String estado, String search, Pageable pageable) {
         List<String> visibleEstados = List.of("PREPARACION", "FINANCIAMIENTO", "EJECUCION", "AUDITADO");
 
@@ -346,12 +338,10 @@ public class ProjectService {
         return projectRepository.findByFilters(estadosFiltro, search, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
-    @Cacheable(value = "projectsCatalog")
     public Page<ProjectResponse> getProjectsByCreator(Long creadorId, Pageable pageable) {
         return projectRepository.findByCreadorId(creadorId, pageable).map(p -> toResponse(p, obtenerSimbolo(p.getId())));
     }
 
-    @Cacheable(value = "projectsCatalog")
     public Page<ProjectResponse> getPublicProjectsByCreator(Long creadorId, Pageable pageable) {
         List<String> visibleEstados = List.of("PREPARACION", "FINANCIAMIENTO", "EJECUCION", "AUDITADO", "FINALIZADO");
         return projectRepository.findByCreadorIdAndFilters(creadorId, visibleEstados, pageable)
@@ -359,7 +349,6 @@ public class ProjectService {
     }
 
     @Transactional
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public void updateProjectStatus(Long projectId, String newEstado) {
         Proyecto proyecto = findProjectOrThrow(projectId);
         String currentEstado = proyecto.getEstado();
@@ -437,7 +426,6 @@ public class ProjectService {
         }
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public ProjectResponse invest(Long projectId, BigDecimal amount) {
         Proyecto proyecto = findProjectOrThrow(projectId);
 
@@ -454,7 +442,6 @@ public class ProjectService {
         return toResponse(projectRepository.save(proyecto), obtenerSimbolo(projectId));
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public void evaluateAndUpdateStates() {
         List<Proyecto> projectsInFinancing = projectRepository.findProjectsInFinancing();
 
@@ -484,7 +471,6 @@ public class ProjectService {
         };
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public void closeProject(Long projectId) {
         Proyecto proyecto = findProjectOrThrow(projectId);
         
@@ -503,7 +489,6 @@ public class ProjectService {
         updateProjectStatus(projectId, "FINALIZADO");
     }
 
-    @CacheEvict(value = {"projectsCatalog", "projectDetails"}, allEntries = true)
     public String finalizeOfferingOnChain(Long projectId) {
         Proyecto proyecto = findProjectOrThrow(projectId);
         if (!List.of("FINANCIAMIENTO", "EJECUCION").contains(proyecto.getEstado())) {
