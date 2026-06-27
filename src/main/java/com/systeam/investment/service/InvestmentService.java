@@ -117,7 +117,7 @@ public class InvestmentService {
         }
 
         int subTokensNecesarios = request.getMontoIdea()
-                .divide(precioSubtoken, 0, RoundingMode.DOWN)
+                .divide(precioSubtoken, 0, RoundingMode.HALF_UP)
                 .intValue();
 
         if (subTokensNecesarios <= 0) {
@@ -211,7 +211,7 @@ public class InvestmentService {
         BigDecimal descuentoPorcentaje = getCrossRewardDiscountPercentage(usuarioId, request.getProyectoId());
 
         int subTokens = request.getMontoIdea()
-                .divide(precioSubtoken, 0, RoundingMode.DOWN)
+                .divide(precioSubtoken, 0, RoundingMode.HALF_UP)
                 .intValue();
 
         if (subTokens <= 0) {
@@ -443,8 +443,17 @@ public class InvestmentService {
     }
 
     private BigDecimal obtenerMontoRecaudadoOnChain(Long proyectoId) {
-        Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
-        return (BigDecimal) proyecto.get("montoRecaudado");
+        try {
+            BigInteger totalWei = offeringContractService.getTotalInvested(BigInteger.valueOf(proyectoId));
+            BigDecimal totalIdea = new BigDecimal(totalWei).divide(BigDecimal.TEN.pow(18), 18, RoundingMode.HALF_UP);
+            log.debug("totalInvested leído de la blockchain para proyecto {}: {} IDEA", proyectoId, totalIdea);
+            return totalIdea;
+        } catch (Exception e) {
+            log.warn("No se pudo leer totalInvested del contrato para proyecto {}. Usando DB como fallback. Error: {}",
+                proyectoId, e.getMessage());
+            Map<String, Object> proyecto = findProjectRowOrThrow(proyectoId);
+            return (BigDecimal) proyecto.get("montoRecaudado");
+        }
     }
 
     private InvestmentResponse toResponse(Inversion inv) {

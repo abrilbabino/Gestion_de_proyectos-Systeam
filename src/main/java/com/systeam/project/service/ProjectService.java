@@ -86,7 +86,7 @@ public class ProjectService {
         String simbolo = request.getSimbolo().toUpperCase();
 
         Integer count = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM projects WHERE simbolo = ?", Integer.class, simbolo);
+            "SELECT COUNT(*) FROM projects WHERE simbolo = ? AND estado NOT IN ('CANCELADO', 'RECHAZADO')", Integer.class, simbolo);
         if (count != null && count > 0) {
             throw new ConflictException("El simbolo '" + simbolo + "' ya esta en uso por otro proyecto");
         }
@@ -171,7 +171,7 @@ public class ProjectService {
             if (request.getSimbolo() != null) {
                 String nuevoSimbolo = request.getSimbolo().toUpperCase();
                 Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM projects WHERE simbolo = ? AND id != ?", Integer.class, nuevoSimbolo, id);
+                    "SELECT COUNT(*) FROM projects WHERE simbolo = ? AND id != ? AND estado NOT IN ('CANCELADO', 'RECHAZADO')", Integer.class, nuevoSimbolo, id);
                 if (count != null && count > 0) {
                     throw new ConflictException("El simbolo '" + nuevoSimbolo + "' ya esta en uso por otro proyecto");
                 }
