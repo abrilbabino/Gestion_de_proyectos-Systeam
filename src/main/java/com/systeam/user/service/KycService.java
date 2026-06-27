@@ -105,12 +105,12 @@ public class KycService {
     /**
      * Validates the HMAC-SHA256 webhook signature from Didit.
      */
-    public boolean isValidSignature(String payload, String signatureHeader) {
+    public boolean isValidSignature(byte[] payload, String signatureHeader) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             SecretKeySpec secretKey = new SecretKeySpec(webhookSecret.getBytes(), "HmacSHA256");
             mac.init(secretKey);
-            byte[] hash = mac.doFinal(payload.getBytes());
+            byte[] hash = mac.doFinal(payload);
             String computed = HexFormat.of().formatHex(hash);
             return computed.equalsIgnoreCase(signatureHeader);
         } catch (Exception e) {
@@ -122,7 +122,7 @@ public class KycService {
     /**
      * Processes the incoming Didit webhook event and updates user KYC status.
      */
-    public void processWebhook(String payload) {
+    public void processWebhook(byte[] payload) {
         try {
             JsonNode event = objectMapper.readTree(payload);
             String status = event.path("status").asText();

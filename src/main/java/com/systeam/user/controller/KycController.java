@@ -41,11 +41,18 @@ public class KycController {
      */
     @PostMapping("/webhook")
     public ResponseEntity<String> handleDiditWebhook(
-            @RequestBody String payload,
-            @RequestHeader(value = "X-Signature-V2", required = false) String signature) {
+            @RequestBody byte[] payload,
+            @RequestHeader(value = "X-Signature-V2", required = false) String signature,
+            @RequestHeader Map<String, String> allHeaders) {
+
+        System.out.println("WEBHOOK RECEIVED!");
+        System.out.println("Headers: " + allHeaders);
+        System.out.println("Payload: " + new String(payload));
+        System.out.println("Signature V2: " + signature);
 
         // Validate signature if webhook secret is configured
         if (signature != null && !kycService.isValidSignature(payload, signature)) {
+            System.out.println("Signature validation FAILED!");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid signature");
         }
 
@@ -53,6 +60,7 @@ public class KycController {
             kycService.processWebhook(payload);
             return ResponseEntity.ok("OK");
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing webhook");
         }
     }
