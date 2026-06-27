@@ -1,4 +1,4 @@
-CREATE TABLE wallet_swaps (
+CREATE TABLE IF NOT EXISTS wallet_swaps (
     id BIGSERIAL PRIMARY KEY,
     usuario_id BIGINT NOT NULL,
     amount_idea DECIMAL(19, 4) NOT NULL,

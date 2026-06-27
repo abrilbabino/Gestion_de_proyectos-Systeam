@@ -1,4 +1,4 @@
-CREATE TABLE hitos (
+CREATE TABLE IF NOT EXISTS hitos (
     id BIGSERIAL PRIMARY KEY,
     proyecto_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     titulo VARCHAR(255) NOT NULL,
@@ -9,4 +9,4 @@ CREATE TABLE hitos (
     updated_at TIMESTAMP
 );
 
-CREATE INDEX idx_hitos_proyecto_id ON hitos(proyecto_id);
+CREATE INDEX IF NOT EXISTS idx_hitos_proyecto_id ON hitos(proyecto_id);
