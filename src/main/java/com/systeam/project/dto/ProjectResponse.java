@@ -2,6 +2,7 @@ package com.systeam.project.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import lombok.Builder;
 import lombok.Data;
@@ -33,4 +34,5 @@ public class ProjectResponse {
     private Long againstVotes = 0L;
     @Builder.Default
     private Long totalVotes = 0L;
+    private List<HitoResponse> hitos;
 }

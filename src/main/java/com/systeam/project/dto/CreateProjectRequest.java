@@ -2,6 +2,8 @@ package com.systeam.project.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import jakarta.validation.Valid;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -46,4 +48,8 @@ public class CreateProjectRequest {
 
     @NotNull(message = "El rubro es obligatorio")
     private Integer rubro;
+
+    @Valid
+    @Size(min = 1, message = "Debe haber al menos un hito")
+    private List<HitoRequest> hitos;
 }

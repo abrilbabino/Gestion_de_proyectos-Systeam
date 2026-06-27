@@ -23,6 +23,7 @@ import com.systeam.project.dto.BoostProjectRequest;
 import com.systeam.project.dto.CreateProjectRequest;
 import com.systeam.project.dto.PublishProjectRequest;
 import com.systeam.project.dto.EscrowReleaseRequest;
+import com.systeam.project.dto.HitoReleaseRequest;
 import com.systeam.project.dto.ProjectResponse;
 import com.systeam.project.dto.ProjectVoteRequest;
 import com.systeam.project.dto.UpdateProjectRequest;
@@ -87,6 +88,15 @@ public class ProjectController {
             @PathVariable Long id,
             @RequestBody @Valid EscrowReleaseRequest request) {
         return projectService.releaseEscrowFunds(id, request.getAmountToRelease(), request.getEscrowAddress());
+    }
+
+    @PostMapping("/{id}/hitos/{hitoId}/release")
+    @PreAuthorize("hasAuthority('project:update')") // O 'auditor:release'
+    public String releaseHito(
+            @PathVariable Long id,
+            @PathVariable Long hitoId,
+            @RequestBody @Valid HitoReleaseRequest request) {
+        return projectService.liberarHito(id, hitoId, request.getComprobanteUrl(), request.getEscrowAddress());
     }
 
     // CREATOR, INVESTOR y ADMIN tienen project:read

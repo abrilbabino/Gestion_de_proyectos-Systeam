@@ -21,6 +21,7 @@ public class BlockchainProperties {
     private String ideaMarketplaceAddress;
     private String ideaGovernanceAddress;
     private String oracleBillingAddress;
+    private String auditOracleAddress;
     private int eventPollInterval;
     private int eventReconcileInterval;
 
@@ -71,6 +72,9 @@ public class BlockchainProperties {
 
     public String getOracleBillingAddress() { return oracleBillingAddress; }
     public void setOracleBillingAddress(String oracleBillingAddress) { this.oracleBillingAddress = oracleBillingAddress; }
+
+    public String getAuditOracleAddress() { return auditOracleAddress; }
+    public void setAuditOracleAddress(String auditOracleAddress) { this.auditOracleAddress = auditOracleAddress; }
 
     public int getEventPollInterval() { return eventPollInterval; }
     public void setEventPollInterval(int eventPollInterval) { this.eventPollInterval = eventPollInterval; }

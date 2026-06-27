@@ -34,6 +34,7 @@ import com.systeam.shared.model.Usuario;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.TokenizationService;
 import com.systeam.blockchain.service.BlockchainService;
+import com.systeam.project.repository.HitoRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceTest {
@@ -56,13 +57,16 @@ class ProjectServiceTest {
     @Mock
     private BlockchainService blockchainService;
 
+    @Mock
+    private HitoRepository hitoRepository;
+
     private ProjectService projectService;
 
     private Proyecto proyectoBase;
 
     @BeforeEach
     void setUp() {
-        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher, userRepository, blockchainService);
+        projectService = new ProjectService(projectRepository, tokenizationService, jdbc, eventPublisher, userRepository, blockchainService, hitoRepository);
         Usuario creador = new Usuario();
         creador.setId(1L);
         creador.setKycStatus("VERIFIED");

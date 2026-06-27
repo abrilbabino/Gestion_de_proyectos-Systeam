@@ -23,6 +23,10 @@ import com.systeam.project.exception.ConflictException;
 import com.systeam.project.exception.ResourceNotFoundException;
 import com.systeam.user.repository.UserRepository;
 import com.systeam.project.repository.ProjectRepository;
+import com.systeam.project.repository.HitoRepository;
+import com.systeam.shared.model.Hito;
+import com.systeam.project.dto.HitoRequest;
+import com.systeam.project.dto.HitoResponse;
 import com.systeam.shared.model.Proyecto;
 import com.systeam.shared.model.Usuario;
 import com.systeam.tokenization.service.TokenizationService;
@@ -39,27 +43,36 @@ public class ProjectService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
     private final BlockchainService blockchainService;
+    private final HitoRepository hitoRepository;
 
     public ProjectService(ProjectRepository projectRepository,
                           TokenizationService tokenizationService,
                           JdbcTemplate jdbc,
                           ApplicationEventPublisher eventPublisher,
                           UserRepository userRepository,
-                          BlockchainService blockchainService) {
+                          BlockchainService blockchainService,
+                          HitoRepository hitoRepository) {
         this.projectRepository = projectRepository;
         this.tokenizationService = tokenizationService;
         this.jdbc = jdbc;
         this.eventPublisher = eventPublisher;
         this.userRepository = userRepository;
         this.blockchainService = blockchainService;
+        this.hitoRepository = hitoRepository;
     }
 
+    @Transactional
     public ProjectResponse createProject(CreateProjectRequest request, Long creadorId) {
         Usuario creador = userRepository.findById(creadorId)
             .orElseThrow(() -> new ConflictException("Usuario creador no encontrado"));
 
         if (!"VERIFIED".equals(creador.getKycStatus())) {
             throw new ConflictException("Debes verificar tu identidad antes de poder crear un proyecto.");
+        }
+
+        List<String> wallets = jdbc.queryForList("SELECT wallet_address FROM users WHERE id = ?", String.class, creadorId);
+        if (wallets.isEmpty() || wallets.get(0) == null || wallets.get(0).trim().isEmpty()) {
+            throw new ConflictException("Debes conectar tu billetera antes de poder crear un proyecto.");
         }
 
         String simbolo = request.getSimbolo().toUpperCase();
@@ -84,9 +97,49 @@ public class ProjectService {
 
         Proyecto saved = projectRepository.save(proyecto);
         jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", simbolo, saved.getId());
+        
+        if (request.getHitos() != null && !request.getHitos().isEmpty()) {
+            if (request.getHitos().size() < 2) {
+                throw new ConflictException("Debe haber al menos 2 hitos");
+            }
+            if (request.getHitos().stream().anyMatch(h -> h.porcentaje().compareTo(new BigDecimal("60.00")) > 0)) {
+                throw new ConflictException("Ningún hito puede superar el 60% del total");
+            }
+            
+            LocalDateTime previousDate = proyecto.getPlazo();
+            LocalDateTime maxAllowedDate = proyecto.getPlazo().plusMonths(24);
+            for (HitoRequest h : request.getHitos()) {
+                if (h.plazo().isAfter(maxAllowedDate)) {
+                    throw new ConflictException("Ningún hito puede extenderse más allá de 24 meses (2 años) desde el cierre de la campaña");
+                }
+                if (h.plazo().isBefore(previousDate.plusDays(7))) {
+                    throw new ConflictException("Cada hito debe tener un plazo de al menos 7 días respecto al cierre de campaña o al hito anterior en el orden ingresado");
+                }
+                previousDate = h.plazo();
+            }
+
+            BigDecimal totalPorcentaje = request.getHitos().stream()
+                .map(HitoRequest::porcentaje)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (totalPorcentaje.compareTo(new BigDecimal("100.00")) != 0) {
+                throw new ConflictException("La suma de los porcentajes de los hitos debe ser exactamente 100%");
+            }
+            List<Hito> hitosToSave = request.getHitos().stream().map(h -> 
+                Hito.builder()
+                    .proyectoId(saved.getId())
+                    .titulo(h.titulo())
+                    .porcentaje(h.porcentaje())
+                    .plazo(h.plazo())
+                    .estado(Hito.EstadoHito.PENDIENTE)
+                    .build()
+            ).toList();
+            hitoRepository.saveAll(hitosToSave);
+        }
+
         return toResponse(saved, simbolo);
     }
 
+    @Transactional
     public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
         Proyecto proyecto = findProjectOrThrow(id);
         String estado = proyecto.getEstado();
@@ -115,6 +168,54 @@ public class ProjectService {
                 }
                 jdbc.update("UPDATE projects SET simbolo = ? WHERE id = ?", nuevoSimbolo, id);
             }
+
+            if (request.getHitos() != null && !request.getHitos().isEmpty()) {
+                if (request.getHitos().size() < 2) {
+                    throw new ConflictException("Debe haber al menos 2 hitos");
+                }
+                if (request.getHitos().stream().anyMatch(h -> h.porcentaje().compareTo(new BigDecimal("60.00")) > 0)) {
+                    throw new ConflictException("Ningún hito puede superar el 60% del total");
+                }
+
+                LocalDateTime previousDate = proyecto.getPlazo();
+                LocalDateTime maxAllowedDate = proyecto.getPlazo().plusMonths(24);
+                for (HitoRequest h : request.getHitos()) {
+                    if (h.plazo().isAfter(maxAllowedDate)) {
+                        throw new ConflictException("Ningún hito puede extenderse más allá de 24 meses (2 años) desde el cierre de la campaña");
+                    }
+                    if (h.plazo().isBefore(previousDate.plusDays(7))) {
+                        throw new ConflictException("Cada hito debe tener un plazo de al menos 7 días respecto al cierre de campaña o al hito anterior en el orden ingresado");
+                    }
+                    previousDate = h.plazo();
+                }
+
+                BigDecimal totalPorcentaje = request.getHitos().stream()
+                    .map(HitoRequest::porcentaje)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (totalPorcentaje.compareTo(new BigDecimal("100.00")) != 0) {
+                    throw new ConflictException("La suma de los porcentajes de los hitos debe ser exactamente 100%");
+                }
+                
+                // Borrar hitos existentes (como estamos en PREPARACION es seguro)
+                List<Hito> existingHitos = hitoRepository.findByProyectoId(id);
+                if (!existingHitos.isEmpty()) {
+                    hitoRepository.deleteAll(existingHitos);
+                }
+                
+                List<Hito> hitosToSave = request.getHitos().stream().map(h -> 
+                    Hito.builder()
+                        .proyectoId(id)
+                        .titulo(h.titulo())
+                        .porcentaje(h.porcentaje())
+                        .plazo(h.plazo())
+                        .estado(Hito.EstadoHito.PENDIENTE)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .updatedAt(java.time.LocalDateTime.now())
+                        .build()
+                ).toList();
+                hitoRepository.saveAll(hitosToSave);
+            }
+
             return toResponse(saved, obtenerSimbolo(id));
         }
 
@@ -171,6 +272,40 @@ public class ProjectService {
             log.error("Error al liberar fondos del escrow", e);
             throw new ConflictException("Fallo en la blockchain al liberar los fondos del escrow: " + e.getMessage());
         }
+    }
+
+    @Transactional
+    public String liberarHito(Long projectId, Long hitoId, String comprobanteUrl, String escrowAddress) {
+        Proyecto proyecto = findProjectOrThrow(projectId);
+        if (!"EJECUCION".equals(proyecto.getEstado())) {
+            throw new ConflictException("El proyecto no esta en EJECUCION");
+        }
+        
+        Hito hito = hitoRepository.findById(hitoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Hito no encontrado"));
+            
+        if (!hito.getProyectoId().equals(projectId)) {
+            throw new ConflictException("El hito no pertenece a este proyecto");
+        }
+        
+        if (hito.getEstado() == Hito.EstadoHito.COMPLETADO) {
+            throw new ConflictException("El hito ya fue liberado");
+        }
+        
+        BigDecimal montoRecaudado = proyecto.getMontoRecaudado();
+        if (montoRecaudado == null || montoRecaudado.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ConflictException("El proyecto no tiene fondos recaudados");
+        }
+        
+        BigDecimal amountToRelease = montoRecaudado.multiply(hito.getPorcentaje()).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+        
+        String txHash = releaseEscrowFunds(projectId, amountToRelease, escrowAddress);
+        
+        hito.setEstado(Hito.EstadoHito.COMPLETADO);
+        hito.setComprobanteUrl(comprobanteUrl);
+        hitoRepository.save(hito);
+        
+        return txHash;
     }
 
     public ProjectResponse getProjectById(Long id) {
@@ -331,6 +466,12 @@ public class ProjectService {
 
     private ProjectResponse toResponse(Proyecto proyecto, String simbolo) {
         long[] votos = obtenerVotos(proyecto.getId());
+        
+        List<Hito> hitos = hitoRepository.findByProyectoId(proyecto.getId());
+        List<HitoResponse> hitosResponse = hitos.stream()
+            .map(h -> new HitoResponse(h.getId(), h.getTitulo(), h.getPorcentaje(), h.getPlazo(), h.getEstado().name(), h.getComprobanteUrl()))
+            .toList();
+
         return ProjectResponse.builder()
                 .id(proyecto.getId())
                 .titulo(proyecto.getTitulo())
@@ -353,6 +494,7 @@ public class ProjectService {
                 .forVotes(votos[0])
                 .againstVotes(votos[1])
                 .totalVotes(votos[2])
+                .hitos(hitosResponse)
                 .build();
     }
 }

@@ -62,7 +62,7 @@ public class AuditOracleClient {
                                      ResultadoAuditoria resultado,
                                      String observaciones,
                                      String kybUrl) {
-        String contractAddress = props.getOracleBillingAddress();
+        String contractAddress = props.getAuditOracleAddress();
 
         if (contractAddress == null || contractAddress.isBlank()) {
             throw new IllegalStateException(
@@ -104,7 +104,7 @@ public class AuditOracleClient {
 
             EthSendTransaction response = txManager.sendTransaction(
                 web3j.ethGasPrice().send().getGasPrice(),
-                BigInteger.valueOf(200_000L),
+                BigInteger.valueOf(800_000L),
                 contractAddress,
                 encodedFunction,
                 BigInteger.ZERO

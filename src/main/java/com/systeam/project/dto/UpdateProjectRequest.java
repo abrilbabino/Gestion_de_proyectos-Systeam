@@ -3,6 +3,8 @@ package com.systeam.project.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.List;
+
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -35,4 +37,6 @@ public class UpdateProjectRequest {
     private String simbolo;
 
     private Integer rubro;
+
+    private List<HitoRequest> hitos;
 }
