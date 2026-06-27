@@ -1,0 +1,53 @@
+name: Push Postgres to Artifact Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      postgres_version:
+        description: 'Versión de PostgreSQL a descargar y subir'
+        required: true
+        default: '15-alpine'
+
+env:
+  PROJECT_ID: project-1944cf83-7f15-4f33-89b
+  REGION: us-central1
+  REPO_NAME: systeam-repo
+  IMAGE_NAME: postgres
+
+jobs:
+  push-postgres:
+    name: Subir Postgres Oficial a GCP
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: 'projects/889190443263/locations/global/workloadIdentityPools/gh-pool-tofu/providers/gh-provider-tofu'
+          service_account: 'tofu-runner@project-1944cf83-7f15-4f33-89b.iam.gserviceaccount.com'
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Pull, Tag and Push Postgres Image
+        run: |
+          echo "Descargando postgres:${{ github.event.inputs.postgres_version }} desde Docker Hub..."
+          docker pull postgres:${{ github.event.inputs.postgres_version }}
+          
+          echo "Etiquetando para Artifact Registry..."
+          GCP_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.postgres_version }}"
+          docker tag postgres:${{ github.event.inputs.postgres_version }} $GCP_IMAGE
+          
+          echo "Subiendo a GCP..."
+          docker push $GCP_IMAGE
+          
+          echo "¡Listo! La imagen fue subida exitosamente a Artifact Registry."
