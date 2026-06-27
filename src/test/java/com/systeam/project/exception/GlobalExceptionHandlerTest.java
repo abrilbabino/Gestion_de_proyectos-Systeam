@@ -50,7 +50,7 @@ class GlobalExceptionHandlerTest {
                 new OracleBillingNotFoundException("Oracle no encontrado"));
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-            assertThat(res.getBody()).containsEntry("error", "Oracle no encontrado");
+            assertThat(res.getBody()).containsEntry("error", "Error en el proceso de facturación oracle");
         }
     }
 
@@ -59,12 +59,12 @@ class GlobalExceptionHandlerTest {
     class HandleRuntimeException {
 
         @Test
-        void retorna400() {
+        void retorna500() {
             ResponseEntity<Map<String, String>> res = handler.handleRuntimeException(
                 new RuntimeException("Algo salio mal"));
 
-            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(res.getBody()).containsEntry("error", "Algo salio mal");
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(res.getBody()).containsEntry("error", "Error interno del servidor");
         }
     }
 
@@ -111,7 +111,7 @@ class GlobalExceptionHandlerTest {
                 new ResourceNotFoundException("Proyecto no encontrado"));
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-            assertThat(res.getBody()).containsEntry("error", "Proyecto no encontrado");
+            assertThat(res.getBody()).containsEntry("error", "Recurso no encontrado");
         }
     }
 
@@ -125,7 +125,7 @@ class GlobalExceptionHandlerTest {
                 new ConflictException("El proyecto ya existe"));
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(res.getBody()).containsEntry("error", "El proyecto ya existe");
+            assertThat(res.getBody()).containsEntry("error", "Conflicto en la operación");
         }
     }
 }

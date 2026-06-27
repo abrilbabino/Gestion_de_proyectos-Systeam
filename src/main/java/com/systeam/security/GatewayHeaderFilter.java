@@ -120,8 +120,7 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(principal, null, authorities));
 
         } catch (Exception e) {
-            log.error("JWT authentication failed: {}", e.getMessage());
-            e.printStackTrace();
+            log.error("JWT authentication failed", e);
         }
     }
 }
